@@ -406,10 +406,10 @@ def compute_delayed(task: dict) -> bool:
     if task.get("status") == "Delayed":
         return True
     now = datetime.now()
-    md = task.get("manager_deadline")
-    if md:
+    d = task.get("date")
+    if d:
         try:
-            if datetime.strptime(md, "%Y-%m-%d").date() < now.date():
+            if datetime.strptime(d, "%Y-%m-%d").date() < now.date():
                 return True
         except Exception:
             pass
@@ -442,7 +442,7 @@ async def ensure_tasks_for_date(d: date):
             "assigned_to": "Founder" if ttype == "Founder Task" else "Designer",
             "brief": goal.get("founder_responsibility", "") or goal.get("designer_responsibility", ""),
             "priority": "Medium",
-            "manager_deadline": date_str,
+            "manager_deadline": "",
             "committed_time": "",
             "status": "Pending",
             "delay_reason": "",

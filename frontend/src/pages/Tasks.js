@@ -126,7 +126,7 @@ function TaskForm({ open, onOpenChange, initial, onSaved }) {
       case "priority":
         return <Field key={key} label="Priority"><SelectField fk="priority" options={PRIORITIES} form={form} set={set} disabled={designerLocked} /></Field>;
       case "manager_deadline":
-        return <Field key={key} label="Manager Deadline"><Input type="date" value={form.manager_deadline || ""} onChange={(e) => set("manager_deadline", e.target.value)} disabled={designerLocked} /></Field>;
+        return <Field key={key} label="Manager Deadline (hrs)"><Input type="number" min="0" step="0.5" value={form.manager_deadline || ""} onChange={(e) => set("manager_deadline", e.target.value)} placeholder="Hours (e.g. 4)" disabled={designerLocked} /></Field>;
       case "committed_time":
         return <Field key={key} label={committedLabel}><Input type="number" min="0" step="0.5" value={form.committed_time || ""} onChange={(e) => set("committed_time", e.target.value)} placeholder="Hours (e.g. 3)" data-testid="task-committed-input" /></Field>;
       case "status":
@@ -245,7 +245,7 @@ export default function Tasks() {
   const cellCategory = (t) => <span className="text-xs whitespace-nowrap">{t.work_category}</span>;
   const cellBrief = (t) => <p className="text-xs text-zinc-600 line-clamp-2 max-w-[260px]">{t.brief || "—"}</p>;
   const cellPriority = (t) => <Badge className={PRIORITY_STYLES[t.priority]}>{t.priority}</Badge>;
-  const cellDeadline = (t) => <span className="text-xs text-zinc-500 whitespace-nowrap">{t.manager_deadline || "—"}</span>;
+  const cellDeadline = (t) => <span className="text-xs text-zinc-500 whitespace-nowrap">{t.manager_deadline !== "" && t.manager_deadline != null ? `${t.manager_deadline} hrs` : "—"}</span>;
   const cellCommitted = (t) => <span className="text-xs text-zinc-500 whitespace-nowrap">{t.committed_time !== "" && t.committed_time != null ? `${t.committed_time} hrs` : "—"}</span>;
   const cellStatus = (t) => (
     <div>
@@ -283,7 +283,7 @@ export default function Tasks() {
         { label: "Client / Work Type", cell: cellCategory },
         { label: "Objective / Brief", cell: cellBrief, cls: "min-w-[200px]" },
         { label: "Priority", cell: cellPriority },
-        { label: "Manager Deadline", cell: cellDeadline, cls: "whitespace-nowrap" },
+        { label: "Manager Deadline (hrs)", cell: cellDeadline, cls: "whitespace-nowrap" },
         { label: "Designer Committed Time (hrs)", cell: cellCommitted, cls: "min-w-[150px]" },
         { label: "Current Status", cell: cellStatus, cls: "min-w-[150px]" },
         { label: "Delay Reason", cell: cellDelay, cls: "min-w-[160px]" },
