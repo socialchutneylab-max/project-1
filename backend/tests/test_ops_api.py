@@ -232,11 +232,51 @@ def test_founder_can_update_review_notes(founder_session, manual_task):
     assert r.json()["review_notes"] == "good work"
 
 
-def test_designer_cannot_create_task(designer_session):
+def test_designer_can_create_task_auto_assigned(designer_session):
+    """Designer can create a task; server forces task_type/assigned_to regardless of body."""
     r = designer_session.post(f"{API}/tasks", json={
-        "date": TODAY, "task_name": "TEST_designer_create", "task_type": "Designer Task"
+        "date": TODAY,
+        "task_name": "TEST_designer_create",
+        # try to spoof as a Founder Task — server should override
+        "task_type": "Founder Task",
+        "assigned_to": "Founder",
+        "work_category": "Client Work",
+        "priority": "High",
+        "status": "Pending",
     })
-    assert r.status_code == 403
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["task_type"] == "Designer Task"
+    assert body["assigned_to"] == "Designer"
+    assert body["task_name"] == "TEST_designer_create"
+    # cleanup via founder session is handled below with a GET + delete
+    _designer_created_id.append(body["id"])
+
+
+def test_founder_create_task_auto_assigned(founder_session):
+    """Founder create: server forces Founder Task / Founder even if body says otherwise."""
+    r = founder_session.post(f"{API}/tasks", json={
+        "date": TODAY,
+        "task_name": "TEST_founder_autotype",
+        "task_type": "Designer Task",   # should be overridden
+        "assigned_to": "Designer",
+        "work_category": "Internal Work",
+        "priority": "Medium",
+        "status": "Pending",
+    })
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["task_type"] == "Founder Task"
+    assert body["assigned_to"] == "Founder"
+    founder_session.delete(f"{API}/tasks/{body['id']}")
+
+
+_designer_created_id = []
+
+
+def test_cleanup_designer_created(founder_session):
+    for tid in _designer_created_id:
+        founder_session.delete(f"{API}/tasks/{tid}")
 
 
 def test_designer_cannot_delete_task(designer_session, manual_task):
