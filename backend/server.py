@@ -439,12 +439,14 @@ async def ensure_tasks_for_date(d: date):
         exists = await db.tasks.find_one({"goal_id": gid, "date": date_str, "auto_generated": True})
         if exists:
             continue
+        owner = goal.get("owner", "Founder")
+        ttype = task_type_for_owner(owner)
         doc = {
             "date": date_str,
-            "task_type": task_type_for_owner(goal.get("owner", "Founder")),
+            "task_type": ttype,
             "work_category": CATEGORY_TO_WORK.get(goal.get("category", ""), "Internal Work"),
             "task_name": goal.get("goal_name", "Untitled"),
-            "assigned_to": goal.get("owner", "Founder"),
+            "assigned_to": "Founder" if ttype == "Founder Task" else "Designer",
             "brief": goal.get("founder_responsibility", "") or goal.get("designer_responsibility", ""),
             "priority": "Medium",
             "manager_deadline": date_str,
@@ -561,9 +563,10 @@ async def update_task(task_id: str, payload: TaskUpdate, user: dict = Depends(ge
     if not existing:
         raise HTTPException(status_code=404, detail="Task not found")
     data = {k: v for k, v in payload.model_dump().items() if v is not None}
-    # only founder may set review notes
-    if "review_notes" in data and user.get("role") != "founder":
-        data.pop("review_notes")
+    # designers may only edit execution fields
+    if user.get("role") != "founder":
+        allowed = {"status", "committed_time", "delay_reason", "output_link"}
+        data = {k: v for k, v in data.items() if k in allowed}
     if data:
         await db.tasks.update_one({"_id": ObjectId(task_id)}, {"$set": data})
     updated = await db.tasks.find_one({"_id": ObjectId(task_id)})

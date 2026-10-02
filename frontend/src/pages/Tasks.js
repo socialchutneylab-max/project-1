@@ -48,8 +48,8 @@ const Field = ({ label, children }) => (
   </div>
 );
 
-const SelectField = ({ fk, options, form, set }) => (
-  <Select value={form[fk]} onValueChange={(v) => set(fk, v)}>
+const SelectField = ({ fk, options, form, set, disabled }) => (
+  <Select value={form[fk]} onValueChange={(v) => set(fk, v)} disabled={disabled}>
     <SelectTrigger data-testid={`task-${fk}-select`}><SelectValue /></SelectTrigger>
     <SelectContent>
       {options.map((o) => <SelectItem key={o} value={o}>{o}</SelectItem>)}
@@ -67,7 +67,13 @@ function TaskForm({ open, onOpenChange, initial, onSaved }) {
     setForm(initial || emptyTask());
   }, [initial, open]);
 
-  const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
+  const set = (k, v) => setForm((f) => {
+    const next = { ...f, [k]: v };
+    if (k === "task_type") next.assigned_to = v === "Founder Task" ? "Founder" : "Designer";
+    return next;
+  });
+
+  const designerLocked = !isFounder; // designer may only edit execution fields
 
   const save = async () => {
     if (!form.task_name.trim()) {
@@ -100,19 +106,21 @@ function TaskForm({ open, onOpenChange, initial, onSaved }) {
         </DialogHeader>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Field label="Task Name">
-            <Input value={form.task_name} onChange={(e) => set("task_name", e.target.value)} disabled={!isFounder && isEdit} data-testid="task-name-input" />
+            <Input value={form.task_name} onChange={(e) => set("task_name", e.target.value)} disabled={designerLocked} data-testid="task-name-input" />
           </Field>
-          <Field label="Date"><Input type="date" value={form.date} onChange={(e) => set("date", e.target.value)} disabled={!isFounder && isEdit} /></Field>
-          <Field label="Task Type"><SelectField fk="task_type" options={TASK_TYPES} form={form} set={set} /></Field>
-          <Field label="Work Category"><SelectField fk="work_category" options={WORK_CATEGORIES} form={form} set={set} /></Field>
-          <Field label="Assigned To"><SelectField fk="assigned_to" options={OWNERS} form={form} set={set} /></Field>
-          <Field label="Priority"><SelectField fk="priority" options={PRIORITIES} form={form} set={set} /></Field>
-          <Field label="Manager Deadline"><Input type="date" value={form.manager_deadline || ""} onChange={(e) => set("manager_deadline", e.target.value)} disabled={!isFounder && isEdit} /></Field>
+          <Field label="Date"><Input type="date" value={form.date} onChange={(e) => set("date", e.target.value)} disabled={designerLocked} /></Field>
+          <Field label="Task Type"><SelectField fk="task_type" options={TASK_TYPES} form={form} set={set} disabled={designerLocked} /></Field>
+          <Field label="Work Category"><SelectField fk="work_category" options={WORK_CATEGORIES} form={form} set={set} disabled={designerLocked} /></Field>
+          <Field label="Assigned To">
+            <Input value={form.assigned_to} readOnly disabled className="bg-zinc-50" data-testid="task-assigned-display" />
+          </Field>
+          <Field label="Priority"><SelectField fk="priority" options={PRIORITIES} form={form} set={set} disabled={designerLocked} /></Field>
+          <Field label="Manager Deadline"><Input type="date" value={form.manager_deadline || ""} onChange={(e) => set("manager_deadline", e.target.value)} disabled={designerLocked} /></Field>
           <Field label="Committed Time (designer)"><Input type="datetime-local" value={form.committed_time || ""} onChange={(e) => set("committed_time", e.target.value)} data-testid="task-committed-input" /></Field>
           <Field label="Status"><SelectField fk="status" options={TASK_STATUSES} form={form} set={set} /></Field>
           <Field label="Output Link"><Input value={form.output_link || ""} onChange={(e) => set("output_link", e.target.value)} placeholder="https://..." data-testid="task-output-input" /></Field>
           <div className="sm:col-span-2">
-            <Field label="Brief"><Textarea value={form.brief || ""} onChange={(e) => set("brief", e.target.value)} rows={2} disabled={!isFounder && isEdit} /></Field>
+            <Field label="Brief"><Textarea value={form.brief || ""} onChange={(e) => set("brief", e.target.value)} rows={2} disabled={designerLocked} /></Field>
           </div>
           <div className="sm:col-span-2">
             <Field label="Delay Reason (if delayed)"><Textarea value={form.delay_reason || ""} onChange={(e) => set("delay_reason", e.target.value)} rows={2} data-testid="task-delay-input" /></Field>
@@ -219,7 +227,7 @@ export default function Tasks() {
       <div className="bg-white border border-zinc-200 rounded-lg p-3 mb-4 flex flex-wrap items-center gap-2">
         <Filter className="w-4 h-4 text-zinc-400 ml-1" />
         <Input type="date" value={filters.date} onChange={(e) => setF("date", e.target.value)} className="w-40 h-9" data-testid="filter-date" />
-        <FilterSelect k="assigned_to" placeholder="All Owners" options={OWNERS} testid="filter-owner" />
+        <FilterSelect k="assigned_to" placeholder="All Owners" options={["Founder", "Designer"]} testid="filter-owner" />
         <FilterSelect k="task_type" placeholder="All Types" options={TASK_TYPES} testid="filter-type" />
         <FilterSelect k="status" placeholder="All Status" options={TASK_STATUSES} testid="filter-status" />
         <FilterSelect k="priority" placeholder="All Priority" options={PRIORITIES} testid="filter-priority" />
