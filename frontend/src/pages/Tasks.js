@@ -105,37 +105,54 @@ function TaskForm({ open, onOpenChange, initial, onSaved }) {
     }
   };
 
+  const catLabel = isFounder ? "Task Category" : "Client / Work Type";
+  const committedLabel = isFounder ? "Estimated Completion Time" : "Designer Committed Time";
+  const reviewLabel = isFounder ? "Review Notes / Next Action" : "Review Notes / Changes";
+  const outputLabel = isFounder ? "Output Link" : "Output Link";
+
+  // form fields mirror the table columns for each role, in the same order
+  const fieldList = isFounder
+    ? ["date", "task_name", "work_category", "brief", "priority", "committed_time", "status", "delay_reason", "review_notes", "output_link"]
+    : ["date", "task_name", "work_category", "brief", "priority", "manager_deadline", "committed_time", "status", "delay_reason", "output_link", "review_notes"];
+
+  const renderField = (key) => {
+    switch (key) {
+      case "date":
+        return <Field key={key} label="Date"><Input type="date" value={form.date} onChange={(e) => set("date", e.target.value)} disabled={designerLocked} /></Field>;
+      case "task_name":
+        return <Field key={key} label="Task Name"><Input value={form.task_name} onChange={(e) => set("task_name", e.target.value)} disabled={designerLocked} data-testid="task-name-input" /></Field>;
+      case "work_category":
+        return <Field key={key} label={catLabel}><SelectField fk="work_category" options={WORK_CATEGORIES} form={form} set={set} disabled={designerLocked} /></Field>;
+      case "priority":
+        return <Field key={key} label="Priority"><SelectField fk="priority" options={PRIORITIES} form={form} set={set} disabled={designerLocked} /></Field>;
+      case "manager_deadline":
+        return <Field key={key} label="Manager Deadline"><Input type="date" value={form.manager_deadline || ""} onChange={(e) => set("manager_deadline", e.target.value)} disabled={designerLocked} /></Field>;
+      case "committed_time":
+        return <Field key={key} label={committedLabel}><Input type="datetime-local" value={form.committed_time || ""} onChange={(e) => set("committed_time", e.target.value)} data-testid="task-committed-input" /></Field>;
+      case "status":
+        return <Field key={key} label="Current Status"><SelectField fk="status" options={TASK_STATUSES} form={form} set={set} /></Field>;
+      case "output_link":
+        return <Field key={key} label={outputLabel}><Input value={form.output_link || ""} onChange={(e) => set("output_link", e.target.value)} placeholder="https://..." data-testid="task-output-input" /></Field>;
+      case "brief":
+        return <div key={key} className="sm:col-span-2"><Field label="Objective / Brief"><Textarea value={form.brief || ""} onChange={(e) => set("brief", e.target.value)} rows={2} disabled={designerLocked} data-testid="task-brief-input" /></Field></div>;
+      case "delay_reason":
+        return <div key={key} className="sm:col-span-2"><Field label="Delay Reason"><Textarea value={form.delay_reason || ""} onChange={(e) => set("delay_reason", e.target.value)} rows={2} data-testid="task-delay-input" /></Field></div>;
+      case "review_notes":
+        return <div key={key} className="sm:col-span-2"><Field label={`${reviewLabel}${isFounder ? "" : " (founder only)"}`}><Textarea value={form.review_notes || ""} onChange={(e) => set("review_notes", e.target.value)} rows={2} disabled={!isFounder} data-testid="task-review-input" /></Field></div>;
+      default:
+        return null;
+    }
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto" data-testid="task-dialog">
         <DialogHeader>
           <DialogTitle className="font-display">{isEdit ? "Edit Task" : "New Task"}</DialogTitle>
+          <p className="text-xs text-zinc-500">{isFounder ? "Founder Task" : "Designer Task"} · assigned to {form.assigned_to}</p>
         </DialogHeader>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Field label="Task Name">
-            <Input value={form.task_name} onChange={(e) => set("task_name", e.target.value)} disabled={designerLocked} data-testid="task-name-input" />
-          </Field>
-          <Field label="Date"><Input type="date" value={form.date} onChange={(e) => set("date", e.target.value)} disabled={designerLocked} /></Field>
-          <Field label="Work Category"><SelectField fk="work_category" options={WORK_CATEGORIES} form={form} set={set} disabled={designerLocked} /></Field>
-          <Field label="Assigned To">
-            <Input value={form.assigned_to} readOnly disabled className="bg-zinc-50" data-testid="task-assigned-display" />
-          </Field>
-          <Field label="Priority"><SelectField fk="priority" options={PRIORITIES} form={form} set={set} disabled={designerLocked} /></Field>
-          <Field label="Manager Deadline"><Input type="date" value={form.manager_deadline || ""} onChange={(e) => set("manager_deadline", e.target.value)} disabled={designerLocked} /></Field>
-          <Field label="Committed Time (designer)"><Input type="datetime-local" value={form.committed_time || ""} onChange={(e) => set("committed_time", e.target.value)} data-testid="task-committed-input" /></Field>
-          <Field label="Status"><SelectField fk="status" options={TASK_STATUSES} form={form} set={set} /></Field>
-          <Field label="Output Link"><Input value={form.output_link || ""} onChange={(e) => set("output_link", e.target.value)} placeholder="https://..." data-testid="task-output-input" /></Field>
-          <div className="sm:col-span-2">
-            <Field label="Brief"><Textarea value={form.brief || ""} onChange={(e) => set("brief", e.target.value)} rows={2} disabled={designerLocked} /></Field>
-          </div>
-          <div className="sm:col-span-2">
-            <Field label="Delay Reason (if delayed)"><Textarea value={form.delay_reason || ""} onChange={(e) => set("delay_reason", e.target.value)} rows={2} data-testid="task-delay-input" /></Field>
-          </div>
-          <div className="sm:col-span-2">
-            <Field label={`Review Notes ${isFounder ? "" : "(founder only)"}`}>
-              <Textarea value={form.review_notes || ""} onChange={(e) => set("review_notes", e.target.value)} rows={2} disabled={!isFounder} data-testid="task-review-input" />
-            </Field>
-          </div>
+          {fieldList.map(renderField)}
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} className="rounded-none">Cancel</Button>
