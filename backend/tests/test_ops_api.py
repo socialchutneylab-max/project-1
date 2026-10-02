@@ -1,0 +1,258 @@
+"""Backend tests for Social Chutney Ops app: auth, goals, tasks, dashboard."""
+import os
+from datetime import date, datetime, timedelta
+import pytest
+import requests
+
+BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "https://execution-track-1.preview.emergentagent.com").rstrip("/")
+API = f"{BASE_URL}/api"
+
+FOUNDER = {"email": "socialchutneylab@gmail.com", "password": "Chutney@2026"}
+DESIGNER = {"email": "designer@socialchutneyco.com", "password": "Design@2026"}
+
+TODAY = date.today().isoformat()
+
+
+def _session():
+    s = requests.Session()
+    s.headers.update({"Content-Type": "application/json"})
+    return s
+
+
+@pytest.fixture(scope="module")
+def founder_session():
+    s = _session()
+    r = s.post(f"{API}/auth/login", json=FOUNDER)
+    assert r.status_code == 200, r.text
+    return s
+
+
+@pytest.fixture(scope="module")
+def designer_session():
+    s = _session()
+    r = s.post(f"{API}/auth/login", json=DESIGNER)
+    assert r.status_code == 200, r.text
+    return s
+
+
+# ---- Auth ----
+def test_root():
+    r = requests.get(f"{API}/")
+    assert r.status_code == 200
+
+
+def test_login_invalid():
+    r = requests.post(f"{API}/auth/login", json={"email": FOUNDER["email"], "password": "wrong"})
+    assert r.status_code == 401
+
+
+def test_me_requires_auth():
+    r = requests.get(f"{API}/auth/me")
+    assert r.status_code == 401
+
+
+def test_founder_login_and_me(founder_session):
+    r = founder_session.get(f"{API}/auth/me")
+    assert r.status_code == 200
+    data = r.json()
+    assert data["email"] == FOUNDER["email"]
+    assert data["role"] == "founder"
+    assert "password_hash" not in data
+    assert "_id" not in data
+
+
+def test_designer_login_and_me(designer_session):
+    r = designer_session.get(f"{API}/auth/me")
+    assert r.status_code == 200
+    assert r.json()["role"] == "designer"
+
+
+def test_forgot_password_generic_registered():
+    r = requests.post(f"{API}/auth/forgot-password", json={"email": FOUNDER["email"]})
+    assert r.status_code == 200
+    assert "registered" in r.json().get("message", "")
+
+
+def test_forgot_password_generic_unregistered():
+    r = requests.post(f"{API}/auth/forgot-password", json={"email": "noone@nowhere.test"})
+    assert r.status_code == 200
+    assert r.json() == {"message": "If that email is registered, a reset link has been sent."}
+
+
+# ---- Goals ----
+@pytest.fixture(scope="module")
+def created_goal(founder_session):
+    payload = {
+        "goal_type": "Daily", "category": "Pitching",
+        "goal_name": "TEST_Doctor Pitching", "target_number": 5, "unit": "leads",
+        "owner": "Founder", "frequency": "Daily", "status": "Active",
+        "founder_responsibility": "Reach out",
+    }
+    r = founder_session.post(f"{API}/goals", json=payload)
+    assert r.status_code == 200, r.text
+    g = r.json()
+    assert g["goal_name"] == "TEST_Doctor Pitching"
+    assert "id" in g and "_id" not in g
+    yield g
+    founder_session.delete(f"{API}/goals/{g['id']}")
+
+
+def test_list_goals_includes_created(founder_session, created_goal):
+    r = founder_session.get(f"{API}/goals")
+    assert r.status_code == 200
+    ids = [g["id"] for g in r.json()]
+    assert created_goal["id"] in ids
+
+
+def test_designer_cannot_create_goal(designer_session):
+    r = designer_session.post(f"{API}/goals", json={
+        "goal_name": "TEST_designer_goal", "target_number": 1, "frequency": "Daily",
+        "category": "Pitching", "owner": "Designer", "status": "Active",
+    })
+    assert r.status_code == 403
+
+
+def test_auto_task_created_for_goal(founder_session, created_goal):
+    # list tasks (ensures today's auto)
+    r = founder_session.get(f"{API}/tasks", params={"date": TODAY})
+    assert r.status_code == 200
+    linked = [t for t in r.json() if t.get("goal_id") == created_goal["id"]]
+    assert len(linked) >= 1, "Auto-generated task not created"
+    t = linked[0]
+    assert t.get("auto_generated") is True
+    assert t["target_number"] == 5
+    assert t["unit"] == "leads"
+    assert t["task_name"] == "TEST_Doctor Pitching"
+    assert t["date"] == TODAY
+
+
+def test_update_goal_propagates_to_tasks(founder_session, created_goal):
+    gid = created_goal["id"]
+    updated_payload = {
+        "goal_type": "Daily", "category": "Pitching",
+        "goal_name": "TEST_Doctor Pitching", "target_number": 8, "unit": "leads",
+        "owner": "Founder", "frequency": "Daily", "status": "Active",
+    }
+    r = founder_session.put(f"{API}/goals/{gid}", json=updated_payload)
+    assert r.status_code == 200
+    assert r.json()["target_number"] == 8
+
+    r2 = founder_session.get(f"{API}/tasks", params={"date": TODAY})
+    linked = [t for t in r2.json() if t.get("goal_id") == gid and t.get("status") != "Done"]
+    assert linked
+    assert linked[0]["target_number"] == 8
+
+
+# ---- Tasks ----
+@pytest.fixture(scope="module")
+def manual_task(founder_session):
+    payload = {
+        "date": TODAY, "task_type": "Founder Task", "work_category": "Internal Work",
+        "task_name": "TEST_Manual Task", "assigned_to": "Founder", "priority": "High",
+        "status": "Pending", "brief": "do it",
+    }
+    r = founder_session.post(f"{API}/tasks", json=payload)
+    assert r.status_code == 200, r.text
+    t = r.json()
+    assert t["task_name"] == "TEST_Manual Task"
+    assert "id" in t and "_id" not in t
+    assert "is_delayed" in t
+    yield t
+    founder_session.delete(f"{API}/tasks/{t['id']}")
+
+
+def test_task_filters(founder_session, manual_task):
+    r = founder_session.get(f"{API}/tasks", params={"date": TODAY, "priority": "High"})
+    assert r.status_code == 200
+    tasks = r.json()
+    assert any(t["id"] == manual_task["id"] for t in tasks)
+    assert all(t["priority"] == "High" for t in tasks)
+
+
+def test_task_status_update_persists(founder_session, manual_task):
+    tid = manual_task["id"]
+    r = founder_session.put(f"{API}/tasks/{tid}", json={"status": "Working"})
+    assert r.status_code == 200
+    assert r.json()["status"] == "Working"
+    r2 = founder_session.get(f"{API}/tasks", params={"date": TODAY})
+    found = next((t for t in r2.json() if t["id"] == tid), None)
+    assert found and found["status"] == "Working"
+
+
+def test_designer_cannot_update_review_notes(designer_session, manual_task):
+    r = designer_session.put(f"{API}/tasks/{manual_task['id']}",
+                             json={"review_notes": "designer attempt", "status": "Working"})
+    assert r.status_code == 200
+    # review_notes should be stripped
+    assert r.json().get("review_notes", "") != "designer attempt"
+
+
+def test_founder_can_update_review_notes(founder_session, manual_task):
+    r = founder_session.put(f"{API}/tasks/{manual_task['id']}", json={"review_notes": "good work"})
+    assert r.status_code == 200
+    assert r.json()["review_notes"] == "good work"
+
+
+def test_designer_cannot_create_task(designer_session):
+    r = designer_session.post(f"{API}/tasks", json={
+        "date": TODAY, "task_name": "TEST_designer_create", "task_type": "Designer Task"
+    })
+    assert r.status_code == 403
+
+
+def test_designer_cannot_delete_task(designer_session, manual_task):
+    r = designer_session.delete(f"{API}/tasks/{manual_task['id']}")
+    assert r.status_code == 403
+
+
+def test_overdue_detection(founder_session):
+    yesterday = (date.today() - timedelta(days=2)).isoformat()
+    r = founder_session.post(f"{API}/tasks", json={
+        "date": yesterday, "task_name": "TEST_Overdue", "task_type": "Founder Task",
+        "manager_deadline": yesterday, "status": "Pending", "priority": "Medium",
+        "work_category": "Internal Work", "assigned_to": "Founder",
+    })
+    assert r.status_code == 200
+    t = r.json()
+    assert t["is_delayed"] is True
+    founder_session.delete(f"{API}/tasks/{t['id']}")
+
+
+# ---- Dashboard ----
+def test_dashboard_renders(founder_session, created_goal, manual_task):
+    r = founder_session.get(f"{API}/dashboard")
+    assert r.status_code == 200
+    d = r.json()
+    for key in ["stats", "designer_workload", "founder_progress",
+                "daily_target_progress", "monthly_goal_progress",
+                "goals_completed", "goals_pending", "delayed_tasks",
+                "needs_review", "charts"]:
+        assert key in d
+    assert "total" in d["stats"]
+    assert d["stats"]["total"] >= 1
+    # the daily goal should be in pending or completed
+    goal_ids = [g["id"] for g in d["goals_pending"] + d["goals_completed"]]
+    assert created_goal["id"] in goal_ids
+
+
+def test_dashboard_goal_completed_after_task_done(founder_session, created_goal):
+    # mark the linked task Done
+    r = founder_session.get(f"{API}/tasks", params={"date": TODAY})
+    linked = [t for t in r.json() if t.get("goal_id") == created_goal["id"]]
+    assert linked
+    tid = linked[0]["id"]
+    r2 = founder_session.put(f"{API}/tasks/{tid}", json={"status": "Done"})
+    assert r2.status_code == 200
+    d = founder_session.get(f"{API}/dashboard").json()
+    completed_ids = [g["id"] for g in d["goals_completed"]]
+    assert created_goal["id"] in completed_ids
+    assert d["daily_target_progress"]["done"] >= 1
+
+
+def test_logout(founder_session):
+    s = _session()
+    s.post(f"{API}/auth/login", json=FOUNDER)
+    r = s.post(f"{API}/auth/logout")
+    assert r.status_code == 200
+    r2 = s.get(f"{API}/auth/me")
+    assert r2.status_code == 401
