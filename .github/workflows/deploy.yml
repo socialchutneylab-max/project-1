@@ -1,0 +1,61 @@
+name: Deploy production
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: socialchutney-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Validate backend dependencies and syntax
+        run: |
+          pip install -r backend/requirements-production.txt
+          python -m compileall -q backend
+          python -m unittest discover -s deploy/tests
+      - name: Build production frontend
+        working-directory: frontend
+        env:
+          REACT_APP_BACKEND_URL: https://backend.thesocialchutneyco.com
+          CI: 'false'
+          GENERATE_SOURCEMAP: 'false'
+        run: |
+          npm ci --legacy-peer-deps --ignore-scripts --no-audit --no-fund
+          npm run build
+          printf '%s\n' "$GITHUB_SHA" > build/deploy-version.txt
+      - name: Package validated code
+        run: |
+          tar -czf frontend.tar.gz -C frontend/build .
+          tar --exclude='.env*' --exclude='__pycache__' --exclude='tests' --exclude='.venv' -czf backend.tar.gz -C backend .
+      - name: Publish deployment packages
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="deploy-$GITHUB_SHA"
+          if ! gh release view "$tag" >/dev/null 2>&1; then
+            gh release create "$tag" --target "$GITHUB_SHA" --prerelease --title "Deployment $GITHUB_SHA" --notes "Validated production deployment packages."
+          fi
+          gh release upload "$tag" frontend.tar.gz backend.tar.gz --clobber
+      - name: Deploy and verify; restore previous version on failure
+        env:
+          HOSTINGER_API_TOKEN: ${{ secrets.HOSTINGER_API_TOKEN }}
+          DEPLOY_SHA: ${{ github.sha }}
+        run: python deploy/auto_deploy.py
