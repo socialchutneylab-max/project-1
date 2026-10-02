@@ -34,7 +34,7 @@ const emptyTask = () => ({
   assigned_to: "Designer",
   brief: "",
   priority: "Medium",
-  manager_deadline: new Date().toISOString().slice(0, 10),
+  manager_deadline: "",
   committed_time: "",
   status: "Pending",
   delay_reason: "",
@@ -245,8 +245,9 @@ export default function Tasks() {
   const cellCategory = (t) => <span className="text-xs whitespace-nowrap">{t.work_category}</span>;
   const cellBrief = (t) => <p className="text-xs text-zinc-600 line-clamp-2 max-w-[260px]">{t.brief || "—"}</p>;
   const cellPriority = (t) => <Badge className={PRIORITY_STYLES[t.priority]}>{t.priority}</Badge>;
-  const cellDeadline = (t) => <span className="text-xs text-zinc-500 whitespace-nowrap">{t.manager_deadline !== "" && t.manager_deadline != null ? `${t.manager_deadline} hrs` : "—"}</span>;
-  const cellCommitted = (t) => <span className="text-xs text-zinc-500 whitespace-nowrap">{t.committed_time !== "" && t.committed_time != null ? `${t.committed_time} hrs` : "—"}</span>;
+  const hrs = (v) => (Number(v) === 1 ? "1 hr" : `${v} hrs`);
+  const cellDeadline = (t) => <span className="text-xs text-zinc-500 whitespace-nowrap">{t.manager_deadline !== "" && t.manager_deadline != null ? hrs(t.manager_deadline) : "—"}</span>;
+  const cellCommitted = (t) => <span className="text-xs text-zinc-500 whitespace-nowrap">{t.committed_time !== "" && t.committed_time != null ? hrs(t.committed_time) : "—"}</span>;
   const cellStatus = (t) => (
     <div>
       <Select value={t.status} onValueChange={(v) => updateStatus(t, v)}>
