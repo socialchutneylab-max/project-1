@@ -49,15 +49,25 @@ export default function Layout() {
           })}
         </nav>
         <div className="px-4 py-4 border-t border-zinc-100">
-          <div className="flex items-center gap-3 mb-3">
-            <div className="w-9 h-9 rounded-full bg-emerald-600 text-white flex items-center justify-center font-bold text-sm">
-              {(user?.name || user?.email || "?").slice(0, 1).toUpperCase()}
-            </div>
-            <div className="min-w-0">
-              <p className="text-sm font-semibold text-zinc-900 truncate" data-testid="current-user-name">
-                {user?.name}
-              </p>
-              <p className="text-xs text-zinc-500 capitalize">{user?.role}</p>
+          <div
+            className={`mb-3 rounded-lg border p-3 ${user?.role === "founder" ? "border-emerald-200 bg-emerald-50" : "border-violet-200 bg-violet-50"}`}
+            data-testid="current-role-banner"
+          >
+            <div className="flex items-center gap-2.5">
+              <div className={`w-9 h-9 rounded-full text-white flex items-center justify-center font-bold text-sm ${user?.role === "founder" ? "bg-emerald-600" : "bg-violet-600"}`}>
+                {(user?.name || user?.email || "?").slice(0, 1).toUpperCase()}
+              </div>
+              <div className="min-w-0">
+                <span
+                  className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${user?.role === "founder" ? "bg-emerald-600 text-white" : "bg-violet-600 text-white"}`}
+                  data-testid="current-role-badge"
+                >
+                  {user?.role === "founder" ? "Founder Login" : "Designer Login"}
+                </span>
+                <p className="text-xs text-zinc-600 truncate mt-1" data-testid="current-user-name" title={user?.email}>
+                  {user?.email}
+                </p>
+              </div>
             </div>
           </div>
           <Button
