@@ -1,0 +1,26 @@
+{
+  "summary": "Verified Goals 403-handling fix and window-focus auth re-sync. Backend regression (29 pytest cases) all pass. All 5 review scenarios pass end-to-end.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "verifications": {
+    "founder_regression": "Founder clean session: POST /api/goals=200 (created TEST_RegressionGoal), PUT /api/goals/{id}=200 (edited to TEST_RegressionGoal_Edited). No 403, 'Goal created' + 'Goal updated' toasts shown.",
+    "403_actionable_toast": "After overwriting cookie with designer login via fetch (status=200, role=designer) WITHOUT reloading the founder page, clicking Save on New Goal returned 403 and the UI showed the actionable toast: 'This browser is currently signed in as the Designer. Log out and sign in as the Founder to manage goals.' (raw error toast was NOT shown).",
+    "focus_resync": "After the 403, both the save() catch's checkAuth() AND an explicit window 'focus' event caused AuthContext to re-fetch /api/auth/me. Role badge flipped from 'Founder Login' to 'Designer Login', add-goal-button disappeared (count=0), and 'Only the founder/manager can add or edit goals.' note became visible.",
+    "designer_clean": "Designer session on /goals Master List: add-goal-button count=0, designer-only note visible.",
+    "badge_colors": "Founder badge text='FOUNDER LOGIN' emerald styling; Designer badge text='DESIGNER LOGIN' bg=rgb(124,58,237) (violet-600). data-testid=current-role-badge present and correct in both roles."
+  },
+  "test_report_links": ["/app/backend/tests/test_ops_api.py", "/app/test_reports/pytest/iter9.xml"],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "AuthContext focus listener is correct and minimal; no debounce needed given /auth/me is cheap. Consider also listening to 'visibilitychange' for better coverage when switching tabs without window-level focus events (minor).",
+    "GoalForm 403 branch is good; same pattern should be applied to Tasks mutation handlers (TaskForm) to show the same actionable toast if a designer cookie overwrites while founder UI is shown.",
+    "DialogContent has aria-describedby warning across the app (non-blocking a11y warning in console)."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100% (29/29 pytest)", "frontend": "100% (5/5 scenarios)"},
+  "test_credentials": "Founder: socialchutneylab@gmail.com/Chutney@2026; Designer: designer@socialchutneyco.com/Design@2026 — both working.",
+  "seed_data_creation": "Created TEST_RegressionGoal (edited to TEST_RegressionGoal_Edited); cleaned up via DELETE /api/goals/{id}=200. Pre-existing non-TEST user goals (sdsd, sadsd, darshit leads) were left intact.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Fix verified. 403-handling toast + window-focus role re-sync both work. Suggest extending the same 403-actionable-toast pattern to TaskForm save paths. Note that the user-stated 'App has 0 goals/0 tasks' precondition was not accurate — 3 existing non-TEST goals were present in DB but didn't affect test outcomes."
+}
