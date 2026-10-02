@@ -91,7 +91,7 @@ services:
         EOF
         exec nginx -g 'daemon off;'
     healthcheck:
-      test: [CMD, wget, -q, -O, /dev/null, 'http://localhost:3000/deploy-version.txt']
+      test: [CMD, wget, -q, -O, /dev/null, 'http://127.0.0.1:3000/deploy-version.txt']
       interval: 10s
       timeout: 6s
       retries: 6
