@@ -150,7 +150,7 @@ EMAIL_FROM_NAME = os.environ.get("EMAIL_FROM_NAME") or "Your App"
 
 
 async def send_password_reset_email(to_email: str, token: str) -> bool:
-    base = os.environ.get("FRONTEND_URL", "").rstrip("/")
+    base = os.environ.get("FRONTEND_URL", "").split(",")[0].strip().rstrip("/")
     link = f"{base}/reset-password?token={token}"
     if not EMAIL_KEY or EMAIL_KEY.startswith("{") or not base.startswith("https://"):
         if urlparse(base).hostname in ("localhost", "127.0.0.1", "::1"):
@@ -735,9 +735,11 @@ async def startup():
 
 app.include_router(api_router)
 
+_cors_origins = [o.strip() for o in os.environ.get("FRONTEND_URL", "http://localhost:3000").split(",") if o.strip()]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[os.environ.get("FRONTEND_URL", "http://localhost:3000")],
+    allow_origins=_cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
