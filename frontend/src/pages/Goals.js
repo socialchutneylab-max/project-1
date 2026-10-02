@@ -22,6 +22,17 @@ import {
   GOAL_TYPES, CATEGORIES, OWNERS, FREQUENCIES, GOAL_STATUS, CATEGORY_ACCENT,
 } from "../lib/constants";
 
+const Field = ({ label, children }) => (
+  <div className="space-y-1.5"><Label className="text-xs">{label}</Label>{children}</div>
+);
+
+const Sel = ({ fk, options, form, set }) => (
+  <Select value={form[fk]} onValueChange={(v) => set(fk, v)}>
+    <SelectTrigger data-testid={`goal-${fk}-select`}><SelectValue /></SelectTrigger>
+    <SelectContent>{options.map((o) => <SelectItem key={o} value={o}>{o}</SelectItem>)}</SelectContent>
+  </Select>
+);
+
 const emptyGoal = () => ({
   goal_type: "Daily",
   category: "Pitching",
@@ -64,29 +75,19 @@ function GoalForm({ open, onOpenChange, initial, onSaved }) {
     }
   };
 
-  const Field = ({ label, children }) => (
-    <div className="space-y-1.5"><Label className="text-xs">{label}</Label>{children}</div>
-  );
-  const Sel = ({ k, options }) => (
-    <Select value={form[k]} onValueChange={(v) => set(k, v)}>
-      <SelectTrigger data-testid={`goal-${k}-select`}><SelectValue /></SelectTrigger>
-      <SelectContent>{options.map((o) => <SelectItem key={o} value={o}>{o}</SelectItem>)}</SelectContent>
-    </Select>
-  );
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto" data-testid="goal-dialog">
         <DialogHeader><DialogTitle className="font-display">{isEdit ? "Edit Goal" : "New Goal"}</DialogTitle></DialogHeader>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="sm:col-span-2"><Field label="Goal Name"><Input value={form.goal_name} onChange={(e) => set("goal_name", e.target.value)} placeholder="e.g. Doctor Pitching" data-testid="goal-name-input" /></Field></div>
-          <Field label="Goal Type"><Sel k="goal_type" options={GOAL_TYPES} /></Field>
-          <Field label="Category"><Sel k="category" options={CATEGORIES} /></Field>
+          <Field label="Goal Type"><Sel fk="goal_type" options={GOAL_TYPES} form={form} set={set} /></Field>
+          <Field label="Category"><Sel fk="category" options={CATEGORIES} form={form} set={set} /></Field>
           <Field label="Target Number"><Input type="number" value={form.target_number} onChange={(e) => set("target_number", e.target.value)} data-testid="goal-target-input" /></Field>
           <Field label="Unit"><Input value={form.unit} onChange={(e) => set("unit", e.target.value)} placeholder="leads, posts, ₹…" /></Field>
-          <Field label="Owner"><Sel k="owner" options={OWNERS} /></Field>
-          <Field label="Frequency"><Sel k="frequency" options={FREQUENCIES} /></Field>
-          <Field label="Status"><Sel k="status" options={GOAL_STATUS} /></Field>
+          <Field label="Owner"><Sel fk="owner" options={OWNERS} form={form} set={set} /></Field>
+          <Field label="Frequency"><Sel fk="frequency" options={FREQUENCIES} form={form} set={set} /></Field>
+          <Field label="Status"><Sel fk="status" options={GOAL_STATUS} form={form} set={set} /></Field>
           <div />
           <div className="sm:col-span-2"><Field label="Founder Responsibility"><Textarea rows={2} value={form.founder_responsibility} onChange={(e) => set("founder_responsibility", e.target.value)} /></Field></div>
           <div className="sm:col-span-2"><Field label="Designer Responsibility"><Textarea rows={2} value={form.designer_responsibility} onChange={(e) => set("designer_responsibility", e.target.value)} /></Field></div>

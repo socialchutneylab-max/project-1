@@ -41,6 +41,22 @@ const emptyTask = () => ({
   review_notes: "",
 });
 
+const Field = ({ label, children }) => (
+  <div className="space-y-1.5">
+    <Label className="text-xs">{label}</Label>
+    {children}
+  </div>
+);
+
+const SelectField = ({ fk, options, form, set }) => (
+  <Select value={form[fk]} onValueChange={(v) => set(fk, v)}>
+    <SelectTrigger data-testid={`task-${fk}-select`}><SelectValue /></SelectTrigger>
+    <SelectContent>
+      {options.map((o) => <SelectItem key={o} value={o}>{o}</SelectItem>)}
+    </SelectContent>
+  </Select>
+);
+
 function TaskForm({ open, onOpenChange, initial, onSaved }) {
   const { isFounder } = useAuth();
   const [form, setForm] = useState(initial || emptyTask());
@@ -76,22 +92,6 @@ function TaskForm({ open, onOpenChange, initial, onSaved }) {
     }
   };
 
-  const Field = ({ label, children }) => (
-    <div className="space-y-1.5">
-      <Label className="text-xs">{label}</Label>
-      {children}
-    </div>
-  );
-
-  const SelectField = ({ k, options }) => (
-    <Select value={form[k]} onValueChange={(v) => set(k, v)}>
-      <SelectTrigger data-testid={`task-${k}-select`}><SelectValue /></SelectTrigger>
-      <SelectContent>
-        {options.map((o) => <SelectItem key={o} value={o}>{o}</SelectItem>)}
-      </SelectContent>
-    </Select>
-  );
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto" data-testid="task-dialog">
@@ -103,13 +103,13 @@ function TaskForm({ open, onOpenChange, initial, onSaved }) {
             <Input value={form.task_name} onChange={(e) => set("task_name", e.target.value)} disabled={!isFounder && isEdit} data-testid="task-name-input" />
           </Field>
           <Field label="Date"><Input type="date" value={form.date} onChange={(e) => set("date", e.target.value)} disabled={!isFounder && isEdit} /></Field>
-          <Field label="Task Type"><SelectField k="task_type" options={TASK_TYPES} /></Field>
-          <Field label="Work Category"><SelectField k="work_category" options={WORK_CATEGORIES} /></Field>
-          <Field label="Assigned To"><SelectField k="assigned_to" options={OWNERS} /></Field>
-          <Field label="Priority"><SelectField k="priority" options={PRIORITIES} /></Field>
+          <Field label="Task Type"><SelectField fk="task_type" options={TASK_TYPES} form={form} set={set} /></Field>
+          <Field label="Work Category"><SelectField fk="work_category" options={WORK_CATEGORIES} form={form} set={set} /></Field>
+          <Field label="Assigned To"><SelectField fk="assigned_to" options={OWNERS} form={form} set={set} /></Field>
+          <Field label="Priority"><SelectField fk="priority" options={PRIORITIES} form={form} set={set} /></Field>
           <Field label="Manager Deadline"><Input type="date" value={form.manager_deadline || ""} onChange={(e) => set("manager_deadline", e.target.value)} disabled={!isFounder && isEdit} /></Field>
           <Field label="Committed Time (designer)"><Input type="datetime-local" value={form.committed_time || ""} onChange={(e) => set("committed_time", e.target.value)} data-testid="task-committed-input" /></Field>
-          <Field label="Status"><SelectField k="status" options={TASK_STATUSES} /></Field>
+          <Field label="Status"><SelectField fk="status" options={TASK_STATUSES} form={form} set={set} /></Field>
           <Field label="Output Link"><Input value={form.output_link || ""} onChange={(e) => set("output_link", e.target.value)} placeholder="https://..." data-testid="task-output-input" /></Field>
           <div className="sm:col-span-2">
             <Field label="Brief"><Textarea value={form.brief || ""} onChange={(e) => set("brief", e.target.value)} rows={2} disabled={!isFounder && isEdit} /></Field>
