@@ -59,12 +59,19 @@ const SelectField = ({ fk, options, form, set, disabled }) => (
 
 function TaskForm({ open, onOpenChange, initial, onSaved }) {
   const { isFounder } = useAuth();
-  const [form, setForm] = useState(initial || emptyTask());
+  const makeEmpty = () => {
+    const base = emptyTask();
+    base.task_type = isFounder ? "Founder Task" : "Designer Task";
+    base.assigned_to = isFounder ? "Founder" : "Designer";
+    return base;
+  };
+  const [form, setForm] = useState(initial || makeEmpty());
   const [saving, setSaving] = useState(false);
   const isEdit = !!(initial && initial.id);
 
   useEffect(() => {
-    setForm(initial || emptyTask());
+    setForm(initial || makeEmpty());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initial, open]);
 
   const set = (k, v) => setForm((f) => {
@@ -73,7 +80,7 @@ function TaskForm({ open, onOpenChange, initial, onSaved }) {
     return next;
   });
 
-  const designerLocked = !isFounder; // designer may only edit execution fields
+  const designerLocked = !isFounder && isEdit; // designer: full entry on create, execution-only on edit
 
   const save = async () => {
     if (!form.task_name.trim()) {
@@ -109,7 +116,6 @@ function TaskForm({ open, onOpenChange, initial, onSaved }) {
             <Input value={form.task_name} onChange={(e) => set("task_name", e.target.value)} disabled={designerLocked} data-testid="task-name-input" />
           </Field>
           <Field label="Date"><Input type="date" value={form.date} onChange={(e) => set("date", e.target.value)} disabled={designerLocked} /></Field>
-          <Field label="Task Type"><SelectField fk="task_type" options={TASK_TYPES} form={form} set={set} disabled={designerLocked} /></Field>
           <Field label="Work Category"><SelectField fk="work_category" options={WORK_CATEGORIES} form={form} set={set} disabled={designerLocked} /></Field>
           <Field label="Assigned To">
             <Input value={form.assigned_to} readOnly disabled className="bg-zinc-50" data-testid="task-assigned-display" />
@@ -212,15 +218,13 @@ export default function Tasks() {
           <p className="text-xs font-bold uppercase tracking-[0.2em] text-emerald-600 mb-1">Task Management</p>
           <h1 className="font-display text-3xl sm:text-4xl font-black tracking-tighter text-zinc-900">Execution Board</h1>
         </div>
-        {isFounder && (
-          <Button
-            onClick={() => { setEditing(null); setDialogOpen(true); }}
-            className="rounded-full bg-emerald-600 hover:bg-emerald-700 font-semibold"
-            data-testid="add-task-button"
-          >
-            <Plus className="w-4 h-4 mr-1" /> New Task
-          </Button>
-        )}
+        <Button
+          onClick={() => { setEditing(null); setDialogOpen(true); }}
+          className="rounded-full bg-emerald-600 hover:bg-emerald-700 font-semibold"
+          data-testid="add-task-button"
+        >
+          <Plus className="w-4 h-4 mr-1" /> New Task
+        </Button>
       </div>
 
       {/* Filters */}

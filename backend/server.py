@@ -548,8 +548,12 @@ async def list_tasks(
 
 
 @api_router.post("/tasks")
-async def create_task(payload: TaskIn, user: dict = Depends(require_founder)):
+async def create_task(payload: TaskIn, user: dict = Depends(get_current_user)):
     doc = payload.model_dump()
+    # task type & assignment are determined by who creates it, not a free choice
+    role = user.get("role")
+    doc["task_type"] = "Founder Task" if role == "founder" else "Designer Task"
+    doc["assigned_to"] = "Founder" if role == "founder" else "Designer"
     doc["auto_generated"] = False
     doc["created_at"] = datetime.now(timezone.utc).isoformat()
     res = await db.tasks.insert_one(doc)
