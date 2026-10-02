@@ -1,0 +1,32 @@
+{
+  "summary": "Verified new founder-task-type feature. Backend 29/29 pytest pass (added 5 new tests: founder creates Founder/Designer Task; founder switches task_type and assigned_to flips; designer PUT task_type/assigned_to is ignored; founder->designer sync - edits by founder are visible to designer). Replaced obsolete test_founder_create_task_auto_assigned (previous iteration asserted server overrode founder's task_type - no longer valid under new spec). Frontend Playwright E2E: FOUNDER new/edit dialog shows data-testid='task-task_type-select'; selecting 'Designer Task' updates dialog header to 'Designer Task · assigned to Designer' and persists; row shows 'Designer · Designer'. DESIGNER login sees founder-created Designer task AND the one that founder reassigned via type switch (shared DB sync verified); DESIGNER New Task dialog has NO task-task_type-select and header is 'Designer Task · assigned to Designer'; DESIGNER EDIT also has no task-task_type-select, task_name/category/brief/priority are disabled, but status/committed/delay/output remain editable. committed_time input type='number' (hours). Cleanup done.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Tasks table (legacy data)", "issues": ["Pre-existing manual tasks created in prior iterations where committed_time was a datetime string (e.g. '2026-10-02T17:57') now render as '2026-10-02T17:57 hrs' because column was changed to numeric hours. Impacts only legacy rows; new entries are numeric. Consider a one-shot migration or allow backend to blank non-numeric committed_time."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_ops_api.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "(Optional) Data cleanup/migration for legacy tasks whose committed_time/manager_deadline were stored as datetime strings before the numeric-hours change; frontend now appends ' hrs' which looks odd for those legacy rows."
+  ],
+  "critical_code_review_comments": [
+    "server.py create_task: founder role honors body task_type (Founder/Designer) with fallback to 'Founder Task'; defense-in-depth for designer forces 'Designer Task' - correct.",
+    "server.py update_task: when founder changes task_type, assigned_to is kept consistent server-side; designer PUT is whitelisted to {status, committed_time, delay_reason, output_link} - verified.",
+    "Tasks.js fieldList: founder includes 'task_type' and uses TASK_TYPES; designer fieldList omits it and makeEmpty() defaults based on role - matches spec.",
+    "manager_deadline / committed_time are numeric hour inputs; compute_delayed uses task.date for overdue - correct.",
+    "Minor: TaskIn/TaskUpdate still type manager_deadline/committed_time as Optional[str] despite being hours; could be float/Optional[float] for stronger validation (currently accepts anything, including legacy datetime strings)."
+  ],
+  "updated_files": ["/app/backend/tests/test_ops_api.py"],
+  "success_rate": {"backend": "100% (29/29)", "frontend": "100% on founder task-type selector + sync + designer restrictions"},
+  "test_credentials": "Founder: socialchutneylab@gmail.com / Chutney@2026 | Designer: designer@socialchutneyco.com / Design@2026",
+  "seed_data_creation": "All pytest and Playwright test data (TEST_*) cleaned up including residual TEST_Doctor Pitching Done task via direct API delete.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Current spec: founder can create/edit tasks for BOTH roles via task-task_type-select; designer sees no selector and is execution-only on edit; shared DB sync verified. Backend regression suite /app/backend/tests/test_ops_api.py has 29 tests. Key testids: task-task_type-select (founder-only), task-assigned (header shows '<type> · assigned to <who>'), task-name-input, task-brief-input, task-committed-input (type=number hours), task-status-select, task-delay-input, task-output-input, task-review-input, task-save-button, add-task-button, edit-task-<id>, delete-task-<id> (founder only), add-goal-button/edit-goal-*/delete-goal-* (founder only)."
+}

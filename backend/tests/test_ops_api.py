@@ -253,22 +253,100 @@ def test_designer_can_create_task_auto_assigned(designer_session):
     _designer_created_id.append(body["id"])
 
 
-def test_founder_create_task_auto_assigned(founder_session):
-    """Founder create: server forces Founder Task / Founder even if body says otherwise."""
+def test_founder_can_create_founder_task(founder_session):
+    """Founder create with task_type Founder Task → assigned_to Founder."""
     r = founder_session.post(f"{API}/tasks", json={
-        "date": TODAY,
-        "task_name": "TEST_founder_autotype",
-        "task_type": "Designer Task",   # should be overridden
-        "assigned_to": "Designer",
-        "work_category": "Internal Work",
-        "priority": "Medium",
-        "status": "Pending",
+        "date": TODAY, "task_name": "TEST_founder_f_task",
+        "task_type": "Founder Task", "work_category": "Internal Work",
+        "priority": "Medium", "status": "Pending",
     })
     assert r.status_code == 200, r.text
-    body = r.json()
-    assert body["task_type"] == "Founder Task"
-    assert body["assigned_to"] == "Founder"
-    founder_session.delete(f"{API}/tasks/{body['id']}")
+    b = r.json()
+    assert b["task_type"] == "Founder Task"
+    assert b["assigned_to"] == "Founder"
+    founder_session.delete(f"{API}/tasks/{b['id']}")
+
+
+def test_founder_can_create_designer_task(founder_session, designer_session):
+    """Founder creates a Designer Task → visible to designer."""
+    r = founder_session.post(f"{API}/tasks", json={
+        "date": TODAY, "task_name": "TEST_founder_creates_designer",
+        "task_type": "Designer Task", "work_category": "Client Work",
+        "priority": "High", "status": "Pending", "brief": "founder brief",
+    })
+    assert r.status_code == 200, r.text
+    b = r.json()
+    tid = b["id"]
+    assert b["task_type"] == "Designer Task"
+    assert b["assigned_to"] == "Designer"
+    # Designer should see it via GET
+    r2 = designer_session.get(f"{API}/tasks", params={"date": TODAY})
+    assert r2.status_code == 200
+    found = next((t for t in r2.json() if t["id"] == tid), None)
+    assert found is not None, "Designer cannot see founder-created designer task"
+    assert found["task_name"] == "TEST_founder_creates_designer"
+    assert found["brief"] == "founder brief"
+    assert found["priority"] == "High"
+    founder_session.delete(f"{API}/tasks/{tid}")
+
+
+def test_founder_switch_task_type_updates_assigned(founder_session):
+    """Founder edits task_type Founder→Designer → assigned_to flips."""
+    r = founder_session.post(f"{API}/tasks", json={
+        "date": TODAY, "task_name": "TEST_switch_type",
+        "task_type": "Founder Task", "work_category": "Internal Work",
+        "priority": "Medium", "status": "Pending",
+    })
+    tid = r.json()["id"]
+    assert r.json()["assigned_to"] == "Founder"
+    r2 = founder_session.put(f"{API}/tasks/{tid}", json={"task_type": "Designer Task"})
+    assert r2.status_code == 200
+    assert r2.json()["task_type"] == "Designer Task"
+    assert r2.json()["assigned_to"] == "Designer"
+    # persistence
+    r3 = founder_session.get(f"{API}/tasks", params={"date": TODAY})
+    found = next((t for t in r3.json() if t["id"] == tid), None)
+    assert found and found["assigned_to"] == "Designer"
+    founder_session.delete(f"{API}/tasks/{tid}")
+
+
+def test_designer_cannot_change_task_type(designer_session, founder_session):
+    """Designer PUT task_type / assigned_to should be ignored."""
+    r = founder_session.post(f"{API}/tasks", json={
+        "date": TODAY, "task_name": "TEST_designer_cant_switch",
+        "task_type": "Designer Task", "work_category": "Client Work",
+        "priority": "Medium", "status": "Pending",
+    })
+    tid = r.json()["id"]
+    r2 = designer_session.put(f"{API}/tasks/{tid}", json={
+        "task_type": "Founder Task", "assigned_to": "Founder", "status": "Working",
+    })
+    assert r2.status_code == 200
+    assert r2.json()["task_type"] == "Designer Task"
+    assert r2.json()["assigned_to"] == "Designer"
+    assert r2.json()["status"] == "Working"
+    founder_session.delete(f"{API}/tasks/{tid}")
+
+
+def test_founder_sync_edit_designer_sees_changes(founder_session, designer_session):
+    """Founder edits a Designer task; designer sees the edits."""
+    r = founder_session.post(f"{API}/tasks", json={
+        "date": TODAY, "task_name": "TEST_sync_v1",
+        "task_type": "Designer Task", "work_category": "Client Work",
+        "priority": "Low", "status": "Pending", "brief": "v1",
+    })
+    tid = r.json()["id"]
+    founder_session.put(f"{API}/tasks/{tid}", json={
+        "task_name": "TEST_sync_v2", "priority": "High", "brief": "v2 brief", "status": "Working",
+    })
+    r2 = designer_session.get(f"{API}/tasks", params={"date": TODAY})
+    found = next((t for t in r2.json() if t["id"] == tid), None)
+    assert found
+    assert found["task_name"] == "TEST_sync_v2"
+    assert found["priority"] == "High"
+    assert found["brief"] == "v2 brief"
+    assert found["status"] == "Working"
+    founder_session.delete(f"{API}/tasks/{tid}")
 
 
 _designer_created_id = []
