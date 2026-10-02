@@ -1,0 +1,101 @@
+{
+  "theme": "light",
+  "typography": {
+    "heading_font": "Cabinet Grotesk",
+    "body_font": "IBM Plex Sans",
+    "scale": {
+      "h1": "text-4xl sm:text-5xl font-black tracking-tighter leading-none",
+      "h2": "text-2xl sm:text-3xl font-bold tracking-tight",
+      "h3": "text-xl sm:text-2xl font-bold tracking-tight",
+      "h4": "text-lg sm:text-xl font-semibold",
+      "body": "text-sm sm:text-base leading-relaxed",
+      "overline": "text-xs font-bold uppercase tracking-[0.2em]"
+    },
+    "instructions": "Avoid Inter/Roboto for headings. Use Cabinet Grotesk for structural authority and IBM Plex Sans for functional data reading. Only use bold/black weights for headers."
+  },
+  "colors": {
+    "archetype": "Swiss & High-Contrast (ARCHETYPE 4)",
+    "palette": {
+      "background_primary": "#FFFFFF",
+      "background_secondary": "#FAFAFA",
+      "surface": "#FFFFFF",
+      "border_subtle": "#E4E4E7",
+      "border_structural": "#18181B",
+      "text_primary": "#09090B",
+      "text_secondary": "#52525B",
+      "accent_chutney": "#EA580C"
+    },
+    "instructions": "Use #EA580C (Orange 600) exclusively for primary CTAs, active states, and progress bars. Keep the rest of the UI monochrome to ensure data clarity and accountability. No full-screen gradients. Borders must be sharp 1px solid lines."
+  },
+  "visual_enhancers": {
+    "surfaces": "Grid Borders and Flat Solid. Do not use glassmorphism as this is an internal data app where legibility is critical.",
+    "shadows": "Minimal. Use sharp 1px borders instead of drop shadows to define boundaries.",
+    "radius": "Max 8px for outer containers, pill-shape (full) for primary CTAs only.",
+    "icons": "Phosphor Icons (@phosphor-icons/react) for dense dashboards and developer tools."
+  },
+  "components": {
+    "strategy": "Shadcn UI heavily customized. Avoid generic Vercel look. Strip shadows, use sharp 1px borders.",
+    "buttons": "Primary: bg-orange-600 text-white rounded-full hover:bg-orange-700. Secondary: border border-zinc-900 bg-transparent text-zinc-900 rounded-none hover:bg-zinc-100.",
+    "inputs_and_forms": "Shadcn Input, Select, Datepicker. Flat backgrounds, clear 1px borders.",
+    "tables": "Dense rows. Sticky header. Status pills using text color and faint background.",
+    "cards": "Cardless or sharp bordered. Remove default shadows from Shadcn cards."
+  },
+  "grids_and_layouts": {
+    "spacing": "Dense internal tool spacing. p-4 or p-6 for general containers.",
+    "bento_mode": "High Density Grid (Mode B). grid-cols-1 md:grid-cols-3 lg:grid-cols-4 for the Review Dashboard stat cards.",
+    "alignment": "Left-align dense text and data tables. Never center-align paragraphs or tabular data.",
+    "navigation": "Sidebar or top fixed header. Must use solid background to prevent overlap."
+  },
+  "motion": {
+    "interactions": "Micro-interactions only. Hover states must have higher contrast.",
+    "transitions": "Use specific properties (e.g., transition-colors, transition-transform). Never use 'transition-all'."
+  },
+  "accessibility": {
+    "contrast": "Maintain APCA / WCAG AA standards. Ensure hover/focus states are distinct.",
+    "testing": "All interactive elements MUST include data-testid attributes (kebab-case, role-based).",
+    "motion": "Respect prefers-reduced-motion."
+  },
+  "media": {
+    "image_urls": {
+      "login_background": {
+        "url": "https://images.unsplash.com/photo-1449247709967-d4461a6a6103?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2ODh8MHwxfHNlYXJjaHwxfHxtaW5pbWFsaXN0JTIwb2ZmaWNlJTIwZGVza3xlbnwwfHx8fDE3OTA5NDAzNzZ8MA&ixlib=rb-4.1.0&q=85",
+        "description": "Minimalist white office desk, to be used as a clean aesthetic backdrop for the login screen."
+      },
+      "avatar_1": {
+        "url": "https://images.unsplash.com/photo-1506863530036-1efeddceb993?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzMzJ8MHwxfHNlYXJjaHwxfHxwcm9mZXNzaW9uYWwlMjBwb3J0cmFpdCUyMGZhY2V8ZW58MHx8fHwxNzkwOTQwMzc2fDA&ixlib=rb-4.1.0&q=85",
+        "description": "Founder/Manager profile placeholder."
+      },
+      "avatar_2": {
+        "url": "https://images.unsplash.com/photo-1494790108377-be9c29b29330?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzMzJ8MHwxfHNlYXJjaHwyfHxwcm9mZXNzaW9uYWwlMjBwb3J0cmFpdCUyMGZhY2V8ZW58MHx8fHwxNzkwOTQwMzc2fDA&ixlib=rb-4.1.0&q=85",
+        "description": "Designer profile placeholder."
+      }
+    },
+    "instructions": "Use images sparingly. The app should feel data-driven."
+  },
+  "3d_libraries": {
+    "strategy": "Not recommended for this internal ops app.",
+    "charts": "Use Recharts or Shadcn Charts for Review Dashboard charts (Daily Target Progress, Monthly Goal Progress). Keep charts flat and data-ink ratio high."
+  },
+  "instructions_to_main_agent": [
+    "Install Phosphor Icons: yarn add @phosphor-icons/react",
+    "Install Recharts for dashboards: yarn add recharts",
+    "Ensure all components are `.js` or `.jsx`, do not create `.tsx` files.",
+    "Use Shadcn UI components extensively for complex interactions (Tables, Tabs, DatePickers, Dialogs, Select).",
+    "Build three main views: Targets & Goals, Task Management, Review Dashboard.",
+    "Task Management table must be rich and filterable.",
+    "Do NOT use transparent backgrounds for overlapping containers like dropdowns or sticky headers."
+  ],
+  "UNIVERSAL_GUIDELINES_FOR_MAIN_AGENT": [
+    "You tend to converge toward generic outputs. Avoid 'AI slop'.",
+    "Dark colors look good when used independently without gradients. DO NOT use dark colors as gradients.",
+    "Don't make generic centered layouts. Create depth through structured grids.",
+    "You MUST NOT apply universal transition (e.g., transition: all).",
+    "You MUST NOT center align the app container (.App { text-align: center; } is FORBIDDEN).",
+    "Always use modern button styles with interaction animations.",
+    "NEVER use AI assistant Emoji characters (\uD83E\uDD16\uD83E\uDDE0) for icons.",
+    "Every interaction needs micro-animations (hover states, focus).",
+    "Use sonner for toasts. Do NOT use standard alert().",
+    "Prioritize using pre-existing components from src/components/ui.",
+    "All interactive and key informational elements MUST include a data-testid attribute for automated testing."
+  ]
+}
