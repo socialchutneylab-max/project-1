@@ -1,0 +1,26 @@
+{
+  "summary": "Targeted frontend re-test for input focus-loss bug fix in New Goal and New Task dialogs. Verified continuous multi-word typing works in all text inputs and textareas without focus loss. Select dropdowns update correctly. Goal save creates row + auto-generates daily task (goal-linked). Task save creates row. Inline status dropdown opens and lists all statuses. All TEST_ data cleaned up afterwards.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Goal & Task dialogs", "issues": ["Radix Dialog console warning: Missing `Description` or `aria-describedby` for DialogContent (a11y nit, non-blocking)"]}
+    ]
+  },
+  "test_report_links": ["/app/test_reports/iteration_2.json"],
+  "action_items": ["(Optional) Add DialogDescription or aria-describedby to GoalForm and TaskForm DialogContent to silence a11y warning."],
+  "critical_code_review_comments": [
+    "Goals.js and Tasks.js: Field, Sel/SelectField hoisted to module scope correctly — fix verified end-to-end.",
+    "Tasks.js still defines FilterSelect inline inside Tasks(); it only contains a Select (no text input) so no focus-loss impact, but same pattern could be moved to module scope for consistency.",
+    "GoalForm.save sends target_number via Number() with fallback 0 — fine, but goal-target-input is type=number and stores a string; consider parseInt or validation."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A (not retested; iteration_1 was 21/21)", "frontend": "100% on scoped bug-fix flows"},
+  "test_credentials": "Founder: socialchutneylab@gmail.com / Chutney@2026 (verified working)",
+  "seed_data_creation": "Created 1 goal (TEST_Doctor Pitching Campaign, Daily, Pitching) and 1 task (TEST_Design doctor pitch deck v1) during test; all TEST_ data (and the goal-linked auto task) deleted. Final state: 0 goals, 0 tasks.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Focus-loss bug is fixed. Field/Sel are module-level in Goals.js and SelectField in Tasks.js. Typing 'TEST_Doctor Pitching Campaign' into goal-name-input retained all characters and focus (document.activeElement remained goal-name-input). Same confirmed for Unit, Target, Founder/Designer Responsibility textareas, Task Name, Brief, Delay Reason, Output Link. Select dropdowns (category, priority) also work. Auto-task generation for Daily frequency goals works (saw 'AUTO · GOAL-LINKED' row). Inline status dropdown on task row opens and lists all TASK_STATUSES (Pending/Working/Sent for Review/Changes Required/Done/Delayed). Note: option name 'Working' (not 'In Progress').",
+  "rca of the issue": "Previously Field/Sel/SelectField helpers were declared inside the parent component body, so each parent re-render created new component types, causing React to unmount+remount the <Input/Textarea> after every keystroke — stealing focus and letting at most 1 character through. Fix: hoisting these helpers to module scope keeps the component identity stable across renders, so input DOM nodes are preserved and focus is retained. Verified by typing full sentences in one go in every reported field."
+}
