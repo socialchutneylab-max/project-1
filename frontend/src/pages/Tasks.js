@@ -6,7 +6,7 @@ import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
 import { Textarea } from "../components/ui/textarea";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger,
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "../components/ui/dialog";
 import {
   Select, SelectTrigger, SelectValue, SelectContent, SelectItem,
@@ -14,10 +14,11 @@ import {
 import {
   Table, TableHeader, TableRow, TableHead, TableBody, TableCell,
 } from "../components/ui/table";
+import { Tabs, TabsList, TabsTrigger } from "../components/ui/tabs";
 import { toast } from "sonner";
 import { Plus, Pencil, Trash2, ExternalLink, Loader2, Filter, X } from "lucide-react";
 import {
-  TASK_TYPES, WORK_CATEGORIES, PRIORITIES, TASK_STATUSES, OWNERS,
+  WORK_CATEGORIES, PRIORITIES, TASK_STATUSES,
   STATUS_STYLES, PRIORITY_STYLES,
 } from "../lib/constants";
 
@@ -57,12 +58,13 @@ const SelectField = ({ fk, options, form, set, disabled }) => (
   </Select>
 );
 
-function TaskForm({ open, onOpenChange, initial, onSaved }) {
+function TaskForm({ open, onOpenChange, initial, onSaved, mode }) {
   const { isFounder } = useAuth();
+  const founderMode = mode === "founder";
   const makeEmpty = () => {
     const base = emptyTask();
-    base.task_type = isFounder ? "Founder Task" : "Designer Task";
-    base.assigned_to = isFounder ? "Founder" : "Designer";
+    base.task_type = founderMode ? "Founder Task" : "Designer Task";
+    base.assigned_to = founderMode ? "Founder" : "Designer";
     return base;
   };
   const [form, setForm] = useState(initial || makeEmpty());
@@ -74,11 +76,7 @@ function TaskForm({ open, onOpenChange, initial, onSaved }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initial, open]);
 
-  const set = (k, v) => setForm((f) => {
-    const next = { ...f, [k]: v };
-    if (k === "task_type") next.assigned_to = v === "Founder Task" ? "Founder" : "Designer";
-    return next;
-  });
+  const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
 
   const designerLocked = !isFounder && isEdit; // designer: full entry on create, execution-only on edit
 
@@ -105,22 +103,20 @@ function TaskForm({ open, onOpenChange, initial, onSaved }) {
     }
   };
 
-  const catLabel = isFounder ? "Task Category" : "Client / Work Type";
-  const committedLabel = isFounder ? "Estimated Completion Time (hrs)" : "Designer Committed Time (hrs)";
-  const reviewLabel = isFounder ? "Review Notes / Next Action" : "Review Notes / Changes";
-  const outputLabel = isFounder ? "Output Link" : "Output Link";
+  const catLabel = founderMode ? "Task Category" : "Client / Work Type";
+  const committedLabel = founderMode ? "Estimated Completion Time (hrs)" : "Designer Committed Time (hrs)";
+  const reviewLabel = founderMode ? "Review Notes / Next Action" : "Review Notes / Changes";
+  const outputLabel = "Output Link";
 
-  // form fields mirror the table columns for each role, in the same order
-  const fieldList = isFounder
-    ? ["date", "task_type", "task_name", "work_category", "brief", "priority", "committed_time", "status", "delay_reason", "review_notes", "output_link"]
+  // form fields mirror the table columns for each tab, in the same order
+  const fieldList = founderMode
+    ? ["date", "task_name", "work_category", "brief", "priority", "committed_time", "status", "delay_reason", "review_notes", "output_link"]
     : ["date", "task_name", "work_category", "brief", "priority", "manager_deadline", "committed_time", "status", "delay_reason", "output_link", "review_notes"];
 
   const renderField = (key) => {
     switch (key) {
       case "date":
         return <Field key={key} label="Date"><Input type="date" value={form.date} onChange={(e) => set("date", e.target.value)} disabled={designerLocked} /></Field>;
-      case "task_type":
-        return <Field key={key} label="Task Type (Founder / Designer)"><SelectField fk="task_type" options={TASK_TYPES} form={form} set={set} /></Field>;
       case "task_name":
         return <Field key={key} label="Task Name"><Input value={form.task_name} onChange={(e) => set("task_name", e.target.value)} disabled={designerLocked} data-testid="task-name-input" /></Field>;
       case "work_category":
@@ -171,18 +167,20 @@ const ALL = "all";
 
 export default function Tasks() {
   const { isFounder } = useAuth();
+  const [tab, setTab] = useState(isFounder ? "founder" : "designer");
+  const founderMode = tab === "founder";
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [filters, setFilters] = useState({
-    date: "", assigned_to: ALL, task_type: ALL, status: ALL, priority: ALL, work_category: ALL,
+    date: "", status: ALL, priority: ALL, work_category: ALL,
   });
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const params = {};
+      const params = { task_type: founderMode ? "Founder Task" : "Designer Task" };
       Object.entries(filters).forEach(([k, v]) => {
         if (v && v !== ALL) params[k] = v;
       });
@@ -191,7 +189,7 @@ export default function Tasks() {
     } finally {
       setLoading(false);
     }
-  }, [filters]);
+  }, [filters, founderMode]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -217,7 +215,7 @@ export default function Tasks() {
   };
 
   const setF = (k, v) => setFilters((f) => ({ ...f, [k]: v }));
-  const clearFilters = () => setFilters({ date: "", assigned_to: ALL, task_type: ALL, status: ALL, priority: ALL, work_category: ALL });
+  const clearFilters = () => setFilters({ date: "", status: ALL, priority: ALL, work_category: ALL });
   const hasFilters = filters.date || Object.values(filters).some((v) => v && v !== ALL && v !== "");
 
   const FilterSelect = ({ k, placeholder, options, testid }) => (
@@ -266,7 +264,7 @@ export default function Tasks() {
     ? <a href={t.output_link} target="_blank" rel="noreferrer" className="text-emerald-700 hover:text-emerald-900 inline-flex items-center gap-1 text-xs" data-testid={`output-link-${t.id}`}><ExternalLink className="w-4 h-4" /></a>
     : <span className="text-zinc-300">—</span>;
 
-  const columns = isFounder
+  const columns = founderMode
     ? [
         { label: "Date", cell: cellDate, cls: "w-24" },
         { label: "Task Name", cell: cellName, cls: "min-w-[180px]" },
@@ -296,26 +294,36 @@ export default function Tasks() {
 
   return (
     <div className="p-6 lg:p-8 fade-up">
-      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-6">
+      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-5">
         <div>
           <p className="text-xs font-bold uppercase tracking-[0.2em] text-emerald-600 mb-1">Task Management</p>
-          <h1 className="font-display text-3xl sm:text-4xl font-black tracking-tighter text-zinc-900">Execution Board</h1>
+          <h1 className="font-display text-3xl sm:text-4xl font-black tracking-tighter text-zinc-900">
+            {founderMode ? "Founder Task Management" : "Designer Task Management"}
+          </h1>
         </div>
         <Button
           onClick={() => { setEditing(null); setDialogOpen(true); }}
           className="rounded-full bg-emerald-600 hover:bg-emerald-700 font-semibold"
           data-testid="add-task-button"
         >
-          <Plus className="w-4 h-4 mr-1" /> New Task
+          <Plus className="w-4 h-4 mr-1" /> New {founderMode ? "Founder" : "Designer"} Task
         </Button>
       </div>
+
+      {/* Tabs: founder can manage both boards; designer sees only their board */}
+      {isFounder && (
+        <Tabs value={tab} onValueChange={setTab} className="mb-4">
+          <TabsList>
+            <TabsTrigger value="founder" data-testid="tab-founder-tasks">Founder Task Management</TabsTrigger>
+            <TabsTrigger value="designer" data-testid="tab-designer-tasks">Designer Task Management</TabsTrigger>
+          </TabsList>
+        </Tabs>
+      )}
 
       {/* Filters */}
       <div className="bg-white border border-zinc-200 rounded-lg p-3 mb-4 flex flex-wrap items-center gap-2">
         <Filter className="w-4 h-4 text-zinc-400 ml-1" />
         <Input type="date" value={filters.date} onChange={(e) => setF("date", e.target.value)} className="w-40 h-9" data-testid="filter-date" />
-        <FilterSelect k="assigned_to" placeholder="All Owners" options={["Founder", "Designer"]} testid="filter-owner" />
-        <FilterSelect k="task_type" placeholder="All Types" options={TASK_TYPES} testid="filter-type" />
         <FilterSelect k="status" placeholder="All Status" options={TASK_STATUSES} testid="filter-status" />
         <FilterSelect k="priority" placeholder="All Priority" options={PRIORITIES} testid="filter-priority" />
         <FilterSelect k="work_category" placeholder="All Categories" options={WORK_CATEGORIES} testid="filter-category" />
@@ -342,7 +350,7 @@ export default function Tasks() {
               {loading ? (
                 <TableRow><TableCell colSpan={colCount} className="text-center py-12"><Loader2 className="w-5 h-5 animate-spin text-emerald-600 mx-auto" /></TableCell></TableRow>
               ) : tasks.length === 0 ? (
-                <TableRow><TableCell colSpan={colCount} className="text-center py-12 text-zinc-400 text-sm">No tasks found. {isFounder ? "Create one or add a goal to auto-generate daily tasks." : "Create your first task with New Task."}</TableCell></TableRow>
+                <TableRow><TableCell colSpan={colCount} className="text-center py-12 text-zinc-400 text-sm">No {founderMode ? "founder" : "designer"} tasks found. Create one with the New Task button{founderMode ? ", or add a goal to auto-generate daily tasks" : ""}.</TableCell></TableRow>
               ) : (
                 tasks.map((t) => (
                   <TableRow key={t.id} data-testid={`task-row-${t.id}`} className="align-top">
@@ -367,7 +375,7 @@ export default function Tasks() {
         </div>
       </div>
 
-      <TaskForm open={dialogOpen} onOpenChange={setDialogOpen} initial={editing} onSaved={load} />
+      <TaskForm open={dialogOpen} onOpenChange={setDialogOpen} initial={editing} onSaved={load} mode={tab} />
     </div>
   );
 }
