@@ -211,6 +211,70 @@ export default function Tasks() {
     </Select>
   );
 
+  // ---- role-specific cell renderers ----
+  const cellDate = (t) => <span className="text-xs text-zinc-500 whitespace-nowrap">{t.date}</span>;
+  const cellName = (t) => (
+    <div>
+      <p className="font-semibold text-zinc-900 text-sm leading-tight">
+        {t.task_name}
+        {t.target_number != null && t.target_number !== "" && (
+          <span className="text-emerald-700"> — {t.target_number}{t.unit ? ` ${t.unit}` : ""}</span>
+        )}
+      </p>
+      <span className="text-[10px] uppercase tracking-wide text-zinc-400 font-semibold">{t.task_type?.replace(" Task", "")} · {t.assigned_to}</span>
+      {t.goal_id && <span className="block text-[10px] uppercase tracking-wide text-emerald-600 font-bold">Auto · Goal-linked</span>}
+    </div>
+  );
+  const cellCategory = (t) => <span className="text-xs whitespace-nowrap">{t.work_category}</span>;
+  const cellBrief = (t) => <p className="text-xs text-zinc-600 line-clamp-2 max-w-[260px]">{t.brief || "—"}</p>;
+  const cellPriority = (t) => <Badge className={PRIORITY_STYLES[t.priority]}>{t.priority}</Badge>;
+  const cellDeadline = (t) => <span className="text-xs text-zinc-500 whitespace-nowrap">{t.manager_deadline || "—"}</span>;
+  const cellCommitted = (t) => <span className="text-xs text-zinc-500 whitespace-nowrap">{t.committed_time ? t.committed_time.replace("T", " ") : "—"}</span>;
+  const cellStatus = (t) => (
+    <div>
+      <Select value={t.status} onValueChange={(v) => updateStatus(t, v)}>
+        <SelectTrigger className="h-7 w-[140px] text-xs" data-testid={`status-select-${t.id}`}><SelectValue /></SelectTrigger>
+        <SelectContent>
+          {TASK_STATUSES.map((s) => <SelectItem key={s} value={s} className="text-xs">{s}</SelectItem>)}
+        </SelectContent>
+      </Select>
+      {t.is_delayed && t.status !== "Delayed" && <Badge className={`${STATUS_STYLES.Delayed} mt-1`}>Overdue</Badge>}
+    </div>
+  );
+  const cellDelay = (t) => t.delay_reason ? <p className="text-xs text-red-600 line-clamp-2 max-w-[200px]">{t.delay_reason}</p> : <span className="text-zinc-300">—</span>;
+  const cellReview = (t) => t.review_notes ? <p className="text-xs text-zinc-700 line-clamp-2 max-w-[240px]">{t.review_notes}</p> : <span className="text-zinc-300">—</span>;
+  const cellOutput = (t) => t.output_link
+    ? <a href={t.output_link} target="_blank" rel="noreferrer" className="text-emerald-700 hover:text-emerald-900 inline-flex items-center gap-1 text-xs" data-testid={`output-link-${t.id}`}><ExternalLink className="w-4 h-4" /></a>
+    : <span className="text-zinc-300">—</span>;
+
+  const columns = isFounder
+    ? [
+        { label: "Date", cell: cellDate, cls: "w-24" },
+        { label: "Task Name", cell: cellName, cls: "min-w-[180px]" },
+        { label: "Task Category", cell: cellCategory },
+        { label: "Objective / Brief", cell: cellBrief, cls: "min-w-[200px]" },
+        { label: "Priority", cell: cellPriority },
+        { label: "Est. Completion Time", cell: cellCommitted, cls: "min-w-[150px]" },
+        { label: "Current Status", cell: cellStatus, cls: "min-w-[150px]" },
+        { label: "Delay Reason", cell: cellDelay, cls: "min-w-[160px]" },
+        { label: "Review Notes / Next Action", cell: cellReview, cls: "min-w-[200px]" },
+        { label: "Output", cell: cellOutput },
+      ]
+    : [
+        { label: "Date", cell: cellDate, cls: "w-24" },
+        { label: "Task Name", cell: cellName, cls: "min-w-[180px]" },
+        { label: "Client / Work Type", cell: cellCategory },
+        { label: "Objective / Brief", cell: cellBrief, cls: "min-w-[200px]" },
+        { label: "Priority", cell: cellPriority },
+        { label: "Manager Deadline", cell: cellDeadline, cls: "whitespace-nowrap" },
+        { label: "Designer Committed Time", cell: cellCommitted, cls: "min-w-[150px]" },
+        { label: "Current Status", cell: cellStatus, cls: "min-w-[150px]" },
+        { label: "Delay Reason", cell: cellDelay, cls: "min-w-[160px]" },
+        { label: "Output Link", cell: cellOutput },
+        { label: "Review Notes / Changes", cell: cellReview, cls: "min-w-[200px]" },
+      ];
+  const colCount = columns.length + 1;
+
   return (
     <div className="p-6 lg:p-8 fade-up">
       <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-6">
@@ -249,70 +313,23 @@ export default function Tasks() {
           <Table className="ops-table">
             <TableHeader>
               <TableRow className="hover:bg-transparent">
-                <TableHead className="w-24">Date</TableHead>
-                <TableHead className="min-w-[180px]">Task Name</TableHead>
-                <TableHead>Task Category</TableHead>
-                <TableHead className="min-w-[200px]">Objective / Brief</TableHead>
-                <TableHead>Priority</TableHead>
-                <TableHead className="min-w-[150px]">Est. Completion Time</TableHead>
-                <TableHead className="min-w-[150px]">Current Status</TableHead>
-                <TableHead className="min-w-[160px]">Delay Reason</TableHead>
-                <TableHead className="min-w-[200px]">Review Notes / Next Action</TableHead>
-                <TableHead>Output</TableHead>
+                {columns.map((c) => (
+                  <TableHead key={c.label} className={c.cls}>{c.label}</TableHead>
+                ))}
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {loading ? (
-                <TableRow><TableCell colSpan={11} className="text-center py-12"><Loader2 className="w-5 h-5 animate-spin text-emerald-600 mx-auto" /></TableCell></TableRow>
+                <TableRow><TableCell colSpan={colCount} className="text-center py-12"><Loader2 className="w-5 h-5 animate-spin text-emerald-600 mx-auto" /></TableCell></TableRow>
               ) : tasks.length === 0 ? (
-                <TableRow><TableCell colSpan={11} className="text-center py-12 text-zinc-400 text-sm">No tasks found. {isFounder ? "Create one or add a goal to auto-generate daily tasks." : "Create your first task with New Task."}</TableCell></TableRow>
+                <TableRow><TableCell colSpan={colCount} className="text-center py-12 text-zinc-400 text-sm">No tasks found. {isFounder ? "Create one or add a goal to auto-generate daily tasks." : "Create your first task with New Task."}</TableCell></TableRow>
               ) : (
                 tasks.map((t) => (
                   <TableRow key={t.id} data-testid={`task-row-${t.id}`} className="align-top">
-                    <TableCell className="text-xs text-zinc-500 whitespace-nowrap">{t.date}</TableCell>
-                    <TableCell>
-                      <p className="font-semibold text-zinc-900 text-sm leading-tight">
-                        {t.task_name}
-                        {t.target_number != null && t.target_number !== "" && (
-                          <span className="text-emerald-700"> — {t.target_number}{t.unit ? ` ${t.unit}` : ""}</span>
-                        )}
-                      </p>
-                      <span className="text-[10px] uppercase tracking-wide text-zinc-400 font-semibold">{t.task_type?.replace(" Task", "")} · {t.assigned_to}</span>
-                      {t.goal_id && <span className="block text-[10px] uppercase tracking-wide text-emerald-600 font-bold">Auto · Goal-linked</span>}
-                    </TableCell>
-                    <TableCell className="text-xs whitespace-nowrap">{t.work_category}</TableCell>
-                    <TableCell className="text-xs text-zinc-600 max-w-[260px]"><p className="line-clamp-2">{t.brief || "—"}</p></TableCell>
-                    <TableCell><Badge className={PRIORITY_STYLES[t.priority]}>{t.priority}</Badge></TableCell>
-                    <TableCell className="text-xs text-zinc-500 whitespace-nowrap">{t.committed_time ? t.committed_time.replace("T", " ") : "—"}</TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-1.5">
-                        <Select value={t.status} onValueChange={(v) => updateStatus(t, v)}>
-                          <SelectTrigger className="h-7 w-[140px] text-xs" data-testid={`status-select-${t.id}`}>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {TASK_STATUSES.map((s) => <SelectItem key={s} value={s} className="text-xs">{s}</SelectItem>)}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      {t.is_delayed && t.status !== "Delayed" && (
-                        <Badge className={`${STATUS_STYLES.Delayed} mt-1`}>Overdue</Badge>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-xs max-w-[200px]">
-                      {t.delay_reason ? <p className="text-red-600 line-clamp-2">{t.delay_reason}</p> : <span className="text-zinc-300">—</span>}
-                    </TableCell>
-                    <TableCell className="text-xs max-w-[240px]">
-                      {t.review_notes ? <p className="text-zinc-700 line-clamp-2">{t.review_notes}</p> : <span className="text-zinc-300">—</span>}
-                    </TableCell>
-                    <TableCell>
-                      {t.output_link ? (
-                        <a href={t.output_link} target="_blank" rel="noreferrer" className="text-emerald-700 hover:text-emerald-900" data-testid={`output-link-${t.id}`}>
-                          <ExternalLink className="w-4 h-4" />
-                        </a>
-                      ) : <span className="text-zinc-300">—</span>}
-                    </TableCell>
+                    {columns.map((c) => (
+                      <TableCell key={c.label} className={c.cls}>{c.cell(t)}</TableCell>
+                    ))}
                     <TableCell className="text-right whitespace-nowrap">
                       <button onClick={() => { setEditing(t); setDialogOpen(true); }} className="p-1.5 hover:bg-zinc-100 rounded transition-colors" data-testid={`edit-task-${t.id}`}>
                         <Pencil className="w-4 h-4 text-zinc-500" />
