@@ -106,7 +106,7 @@ function TaskForm({ open, onOpenChange, initial, onSaved }) {
   };
 
   const catLabel = isFounder ? "Task Category" : "Client / Work Type";
-  const committedLabel = isFounder ? "Estimated Completion Time" : "Designer Committed Time";
+  const committedLabel = isFounder ? "Estimated Completion Time (hrs)" : "Designer Committed Time (hrs)";
   const reviewLabel = isFounder ? "Review Notes / Next Action" : "Review Notes / Changes";
   const outputLabel = isFounder ? "Output Link" : "Output Link";
 
@@ -128,7 +128,7 @@ function TaskForm({ open, onOpenChange, initial, onSaved }) {
       case "manager_deadline":
         return <Field key={key} label="Manager Deadline"><Input type="date" value={form.manager_deadline || ""} onChange={(e) => set("manager_deadline", e.target.value)} disabled={designerLocked} /></Field>;
       case "committed_time":
-        return <Field key={key} label={committedLabel}><Input type="datetime-local" value={form.committed_time || ""} onChange={(e) => set("committed_time", e.target.value)} data-testid="task-committed-input" /></Field>;
+        return <Field key={key} label={committedLabel}><Input type="number" min="0" step="0.5" value={form.committed_time || ""} onChange={(e) => set("committed_time", e.target.value)} placeholder="Hours (e.g. 3)" data-testid="task-committed-input" /></Field>;
       case "status":
         return <Field key={key} label="Current Status"><SelectField fk="status" options={TASK_STATUSES} form={form} set={set} /></Field>;
       case "output_link":
@@ -246,7 +246,7 @@ export default function Tasks() {
   const cellBrief = (t) => <p className="text-xs text-zinc-600 line-clamp-2 max-w-[260px]">{t.brief || "—"}</p>;
   const cellPriority = (t) => <Badge className={PRIORITY_STYLES[t.priority]}>{t.priority}</Badge>;
   const cellDeadline = (t) => <span className="text-xs text-zinc-500 whitespace-nowrap">{t.manager_deadline || "—"}</span>;
-  const cellCommitted = (t) => <span className="text-xs text-zinc-500 whitespace-nowrap">{t.committed_time ? t.committed_time.replace("T", " ") : "—"}</span>;
+  const cellCommitted = (t) => <span className="text-xs text-zinc-500 whitespace-nowrap">{t.committed_time !== "" && t.committed_time != null ? `${t.committed_time} hrs` : "—"}</span>;
   const cellStatus = (t) => (
     <div>
       <Select value={t.status} onValueChange={(v) => updateStatus(t, v)}>
@@ -271,7 +271,7 @@ export default function Tasks() {
         { label: "Task Category", cell: cellCategory },
         { label: "Objective / Brief", cell: cellBrief, cls: "min-w-[200px]" },
         { label: "Priority", cell: cellPriority },
-        { label: "Est. Completion Time", cell: cellCommitted, cls: "min-w-[150px]" },
+        { label: "Est. Completion Time (hrs)", cell: cellCommitted, cls: "min-w-[150px]" },
         { label: "Current Status", cell: cellStatus, cls: "min-w-[150px]" },
         { label: "Delay Reason", cell: cellDelay, cls: "min-w-[160px]" },
         { label: "Review Notes / Next Action", cell: cellReview, cls: "min-w-[200px]" },
@@ -284,7 +284,7 @@ export default function Tasks() {
         { label: "Objective / Brief", cell: cellBrief, cls: "min-w-[200px]" },
         { label: "Priority", cell: cellPriority },
         { label: "Manager Deadline", cell: cellDeadline, cls: "whitespace-nowrap" },
-        { label: "Designer Committed Time", cell: cellCommitted, cls: "min-w-[150px]" },
+        { label: "Designer Committed Time (hrs)", cell: cellCommitted, cls: "min-w-[150px]" },
         { label: "Current Status", cell: cellStatus, cls: "min-w-[150px]" },
         { label: "Delay Reason", cell: cellDelay, cls: "min-w-[160px]" },
         { label: "Output Link", cell: cellOutput },

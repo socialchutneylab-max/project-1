@@ -406,13 +406,6 @@ def compute_delayed(task: dict) -> bool:
     if task.get("status") == "Delayed":
         return True
     now = datetime.now()
-    ct = task.get("committed_time")
-    if ct:
-        try:
-            if datetime.fromisoformat(ct.replace("Z", "")) < now:
-                return True
-        except Exception:
-            pass
     md = task.get("manager_deadline")
     if md:
         try:
