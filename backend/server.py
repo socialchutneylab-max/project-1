@@ -543,10 +543,14 @@ async def list_tasks(
 @api_router.post("/tasks")
 async def create_task(payload: TaskIn, user: dict = Depends(get_current_user)):
     doc = payload.model_dump()
-    # task type & assignment are determined by who creates it, not a free choice
+    # task type & assignment: founder may choose Founder/Designer; designer is always Designer
     role = user.get("role")
-    doc["task_type"] = "Founder Task" if role == "founder" else "Designer Task"
-    doc["assigned_to"] = "Founder" if role == "founder" else "Designer"
+    if role == "founder":
+        tt = doc.get("task_type") if doc.get("task_type") in ("Founder Task", "Designer Task") else "Founder Task"
+    else:
+        tt = "Designer Task"
+    doc["task_type"] = tt
+    doc["assigned_to"] = "Founder" if tt == "Founder Task" else "Designer"
     doc["auto_generated"] = False
     doc["created_at"] = datetime.now(timezone.utc).isoformat()
     res = await db.tasks.insert_one(doc)
@@ -564,6 +568,8 @@ async def update_task(task_id: str, payload: TaskUpdate, user: dict = Depends(ge
     if user.get("role") != "founder":
         allowed = {"status", "committed_time", "delay_reason", "output_link"}
         data = {k: v for k, v in data.items() if k in allowed}
+    elif data.get("task_type") in ("Founder Task", "Designer Task"):
+        data["assigned_to"] = "Founder" if data["task_type"] == "Founder Task" else "Designer"
     if data:
         await db.tasks.update_one({"_id": ObjectId(task_id)}, {"$set": data})
     updated = await db.tasks.find_one({"_id": ObjectId(task_id)})

@@ -112,13 +112,15 @@ function TaskForm({ open, onOpenChange, initial, onSaved }) {
 
   // form fields mirror the table columns for each role, in the same order
   const fieldList = isFounder
-    ? ["date", "task_name", "work_category", "brief", "priority", "committed_time", "status", "delay_reason", "review_notes", "output_link"]
+    ? ["date", "task_type", "task_name", "work_category", "brief", "priority", "committed_time", "status", "delay_reason", "review_notes", "output_link"]
     : ["date", "task_name", "work_category", "brief", "priority", "manager_deadline", "committed_time", "status", "delay_reason", "output_link", "review_notes"];
 
   const renderField = (key) => {
     switch (key) {
       case "date":
         return <Field key={key} label="Date"><Input type="date" value={form.date} onChange={(e) => set("date", e.target.value)} disabled={designerLocked} /></Field>;
+      case "task_type":
+        return <Field key={key} label="Task Type (Founder / Designer)"><SelectField fk="task_type" options={TASK_TYPES} form={form} set={set} /></Field>;
       case "task_name":
         return <Field key={key} label="Task Name"><Input value={form.task_name} onChange={(e) => set("task_name", e.target.value)} disabled={designerLocked} data-testid="task-name-input" /></Field>;
       case "work_category":
@@ -149,7 +151,7 @@ function TaskForm({ open, onOpenChange, initial, onSaved }) {
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto" data-testid="task-dialog">
         <DialogHeader>
           <DialogTitle className="font-display">{isEdit ? "Edit Task" : "New Task"}</DialogTitle>
-          <p className="text-xs text-zinc-500">{isFounder ? "Founder Task" : "Designer Task"} · assigned to {form.assigned_to}</p>
+          <p className="text-xs text-zinc-500">{form.task_type} · assigned to {form.assigned_to}</p>
         </DialogHeader>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {fieldList.map(renderField)}
