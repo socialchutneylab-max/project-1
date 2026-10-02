@@ -1,0 +1,31 @@
+{
+  "summary": "Re-tested role-based restrictions for Tasks & Goals. Backend: 23/23 pytest passed (added 2 new tests: designer-locked-fields-ignored on PUT /tasks, and designer-cannot-update-goal). Frontend (Playwright): verified (a) Founder New Task dialog shows Assigned To as read-only INPUT [data-testid=task-assigned-display], auto-derives Founder/Designer from Task Type; (b) Founder can save normally; (c) Designer login shows no New Task / New Goal / delete buttons; (d) Designer edit dialog has task_name & review_notes disabled while status/committed/delay/output are editable, and save persists; (e) Designer sees no edit/delete goal buttons in master list. Cleanup: deleted TEST_ tasks via API.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Task & Goal dialogs", "issues": ["Radix a11y console warning: Missing Description/aria-describedby on DialogContent (pre-existing, non-blocking)"]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_ops_api.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "(Optional, non-blocking) Add DialogDescription or aria-describedby to task-dialog and goal-dialog to silence a11y warnings."
+  ],
+  "critical_code_review_comments": [
+    "server.py update_task role filter correctly restricts designers to {status, committed_time, delay_reason, output_link}; verified by test_designer_locked_fields_ignored (priority/assigned_to/task_name ignored).",
+    "Tasks.js set() derives assigned_to from task_type and Assigned To is rendered as readOnly disabled Input (data-testid task-assigned-display) — matches requirements.",
+    "Goals.js correctly gates add-goal-button, edit-goal-*, delete-goal-* behind isFounder; master list action column also hidden for designer.",
+    "Minor: Tasks row inline status Select is enabled for all users (correct — designer may change status); Tasks table edit button icon is a Pencil for designer even though some fields are read-only — consider an 'eye' icon or re-labeling tooltip for designer to clarify view/edit-execution mode (nit)."
+  ],
+  "updated_files": ["/app/backend/tests/test_ops_api.py"],
+  "success_rate": {"backend": "100% (23/23)", "frontend": "100% on all RBAC flows"},
+  "test_credentials": "Founder: socialchutneylab@gmail.com / Chutney@2026 — Designer: designer@socialchutneyco.com / Design@2026 (both verified)",
+  "seed_data_creation": "Created TEST_Manual Task, TEST_Doctor Pitching goal + its auto task, TEST_Overdue (pytest fixtures auto-deleted). Playwright created TEST_RBAC_FounderCreated — deleted post-test. Final DB state: no TEST_ data remaining.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "RBAC story complete: Assigned-To is read-only Input auto-derived from Task Type; designer locked out of all non-execution task fields client-side AND server-side; designer cannot create/delete tasks or goals and cannot edit goals. Backend regression suite is at /app/backend/tests/test_ops_api.py (23 tests, module-scoped fixtures with teardown). Frontend data-testids in use: add-task-button, task-dialog, task-assigned-display, task-task_type-select, task-name-input, task-review-input, task-status-select, task-committed-input, task-delay-input, task-output-input, task-save-button, edit-task-*, delete-task-*, add-goal-button, edit-goal-*, delete-goal-*, tab-list, tab-overview."
+}

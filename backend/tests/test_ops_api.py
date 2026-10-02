@@ -187,6 +187,45 @@ def test_designer_cannot_update_review_notes(designer_session, manual_task):
     assert r.json().get("review_notes", "") != "designer attempt"
 
 
+def test_designer_locked_fields_ignored(designer_session, founder_session, manual_task):
+    """Designer PUT with priority/assigned_to/task_name should ignore locked fields but apply allowed ones."""
+    tid = manual_task["id"]
+    r = designer_session.put(f"{API}/tasks/{tid}", json={
+        "priority": "Low",
+        "assigned_to": "Designer",
+        "task_name": "TEST_hacked_name",
+        "status": "Sent for Review",
+        "committed_time": "2026-01-01T10:00",
+        "delay_reason": "needed more time",
+        "output_link": "https://example.com/out",
+    })
+    assert r.status_code == 200
+    body = r.json()
+    # allowed fields applied
+    assert body["status"] == "Sent for Review"
+    assert body["committed_time"] == "2026-01-01T10:00"
+    assert body["delay_reason"] == "needed more time"
+    assert body["output_link"] == "https://example.com/out"
+    # locked fields NOT changed (manual_task was created priority=High, assigned_to=Founder, task_name=TEST_Manual Task)
+    assert body["priority"] == "High"
+    assert body["assigned_to"] == "Founder"
+    assert body["task_name"] == "TEST_Manual Task"
+
+    # verify persistence via founder GET
+    r2 = founder_session.get(f"{API}/tasks", params={"date": TODAY})
+    found = next((t for t in r2.json() if t["id"] == tid), None)
+    assert found and found["priority"] == "High" and found["assigned_to"] == "Founder"
+
+
+def test_designer_cannot_update_goal(designer_session, created_goal):
+    r = designer_session.put(f"{API}/goals/{created_goal['id']}", json={
+        "goal_type": "Daily", "category": "Pitching",
+        "goal_name": "TEST_hacked", "target_number": 99, "unit": "x",
+        "owner": "Founder", "frequency": "Daily", "status": "Active",
+    })
+    assert r.status_code == 403
+
+
 def test_founder_can_update_review_notes(founder_session, manual_task):
     r = founder_session.put(f"{API}/tasks/{manual_task['id']}", json={"review_notes": "good work"})
     assert r.status_code == 200
