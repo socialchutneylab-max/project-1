@@ -250,22 +250,23 @@ export default function Tasks() {
             <TableHeader>
               <TableRow className="hover:bg-transparent">
                 <TableHead className="w-24">Date</TableHead>
-                <TableHead className="min-w-[200px]">Task</TableHead>
-                <TableHead>Type</TableHead>
-                <TableHead>Category</TableHead>
-                <TableHead>Assigned</TableHead>
+                <TableHead className="min-w-[180px]">Task Name</TableHead>
+                <TableHead>Task Category</TableHead>
+                <TableHead className="min-w-[200px]">Objective / Brief</TableHead>
                 <TableHead>Priority</TableHead>
-                <TableHead>Deadline</TableHead>
-                <TableHead className="min-w-[160px]">Status</TableHead>
+                <TableHead className="min-w-[150px]">Est. Completion Time</TableHead>
+                <TableHead className="min-w-[150px]">Current Status</TableHead>
+                <TableHead className="min-w-[160px]">Delay Reason</TableHead>
+                <TableHead className="min-w-[200px]">Review Notes / Next Action</TableHead>
                 <TableHead>Output</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {loading ? (
-                <TableRow><TableCell colSpan={10} className="text-center py-12"><Loader2 className="w-5 h-5 animate-spin text-emerald-600 mx-auto" /></TableCell></TableRow>
+                <TableRow><TableCell colSpan={11} className="text-center py-12"><Loader2 className="w-5 h-5 animate-spin text-emerald-600 mx-auto" /></TableCell></TableRow>
               ) : tasks.length === 0 ? (
-                <TableRow><TableCell colSpan={10} className="text-center py-12 text-zinc-400 text-sm">No tasks found. {isFounder ? "Create one or add a goal to auto-generate daily tasks." : ""}</TableCell></TableRow>
+                <TableRow><TableCell colSpan={11} className="text-center py-12 text-zinc-400 text-sm">No tasks found. {isFounder ? "Create one or add a goal to auto-generate daily tasks." : "Create your first task with New Task."}</TableCell></TableRow>
               ) : (
                 tasks.map((t) => (
                   <TableRow key={t.id} data-testid={`task-row-${t.id}`} className="align-top">
@@ -277,15 +278,13 @@ export default function Tasks() {
                           <span className="text-emerald-700"> — {t.target_number}{t.unit ? ` ${t.unit}` : ""}</span>
                         )}
                       </p>
-                      {t.brief && <p className="text-xs text-zinc-400 mt-0.5 line-clamp-1 max-w-[260px]">{t.brief}</p>}
-                      {t.delay_reason && <p className="text-xs text-red-500 mt-0.5">⚠ {t.delay_reason}</p>}
-                      {t.goal_id && <span className="text-[10px] uppercase tracking-wide text-emerald-600 font-bold">Auto · Goal-linked</span>}
+                      <span className="text-[10px] uppercase tracking-wide text-zinc-400 font-semibold">{t.task_type?.replace(" Task", "")} · {t.assigned_to}</span>
+                      {t.goal_id && <span className="block text-[10px] uppercase tracking-wide text-emerald-600 font-bold">Auto · Goal-linked</span>}
                     </TableCell>
-                    <TableCell className="text-xs whitespace-nowrap">{t.task_type?.replace(" Task", "")}</TableCell>
                     <TableCell className="text-xs whitespace-nowrap">{t.work_category}</TableCell>
-                    <TableCell className="text-xs whitespace-nowrap">{t.assigned_to}</TableCell>
+                    <TableCell className="text-xs text-zinc-600 max-w-[260px]"><p className="line-clamp-2">{t.brief || "—"}</p></TableCell>
                     <TableCell><Badge className={PRIORITY_STYLES[t.priority]}>{t.priority}</Badge></TableCell>
-                    <TableCell className="text-xs text-zinc-500 whitespace-nowrap">{t.manager_deadline || "—"}</TableCell>
+                    <TableCell className="text-xs text-zinc-500 whitespace-nowrap">{t.committed_time ? t.committed_time.replace("T", " ") : "—"}</TableCell>
                     <TableCell>
                       <div className="flex items-center gap-1.5">
                         <Select value={t.status} onValueChange={(v) => updateStatus(t, v)}>
@@ -300,6 +299,12 @@ export default function Tasks() {
                       {t.is_delayed && t.status !== "Delayed" && (
                         <Badge className={`${STATUS_STYLES.Delayed} mt-1`}>Overdue</Badge>
                       )}
+                    </TableCell>
+                    <TableCell className="text-xs max-w-[200px]">
+                      {t.delay_reason ? <p className="text-red-600 line-clamp-2">{t.delay_reason}</p> : <span className="text-zinc-300">—</span>}
+                    </TableCell>
+                    <TableCell className="text-xs max-w-[240px]">
+                      {t.review_notes ? <p className="text-zinc-700 line-clamp-2">{t.review_notes}</p> : <span className="text-zinc-300">—</span>}
                     </TableCell>
                     <TableCell>
                       {t.output_link ? (
