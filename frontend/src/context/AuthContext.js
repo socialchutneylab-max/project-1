@@ -17,6 +17,12 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     checkAuth();
+    // Re-sync the real session identity when the tab regains focus.
+    // This auto-corrects cases where another tab logged in as a different
+    // account (cookies are shared across tabs in the same browser).
+    const onFocus = () => checkAuth();
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
   }, [checkAuth]);
 
   const login = async (email, password) => {

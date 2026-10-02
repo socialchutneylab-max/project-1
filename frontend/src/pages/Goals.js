@@ -47,6 +47,7 @@ const emptyGoal = () => ({
 });
 
 function GoalForm({ open, onOpenChange, initial, onSaved }) {
+  const { checkAuth } = useAuth();
   const [form, setForm] = useState(initial || emptyGoal());
   const [saving, setSaving] = useState(false);
   const isEdit = !!(initial && initial.id);
@@ -69,7 +70,12 @@ function GoalForm({ open, onOpenChange, initial, onSaved }) {
       onOpenChange(false);
       onSaved();
     } catch (e) {
-      toast.error(formatApiErrorDetail(e.response?.data?.detail) || "Failed to save");
+      if (e.response?.status === 403) {
+        toast.error("This browser is currently signed in as the Designer. Log out and sign in as the Founder to manage goals.");
+        checkAuth();
+      } else {
+        toast.error(formatApiErrorDetail(e.response?.data?.detail) || "Failed to save");
+      }
     } finally {
       setSaving(false);
     }
