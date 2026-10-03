@@ -50,7 +50,7 @@ export default function Login() {
         </div>
         <div
           className="absolute -right-24 -bottom-24 w-96 h-96 rounded-full"
-          style={{ background: "radial-gradient(circle, rgba(16,185,129,0.25), transparent 70%)" }}
+          style={{ background: "radial-gradient(circle, rgba(239,68,68,0.25), transparent 70%)" }}
         />
       </div>
 
