@@ -34,7 +34,7 @@ export default function Login() {
       {/* Left brand panel */}
       <div className="hidden lg:flex flex-col justify-between bg-zinc-950 text-white p-12 relative overflow-hidden">
         <div className="relative z-10">
-          <img src="/logo.png" alt="The Social Chutney Co." className="h-16 w-auto object-contain bg-white rounded-lg p-2 inline-block" />
+          <img src="/logo-white.png" alt="The Social Chutney Co." className="h-12 w-auto object-contain inline-block" />
         </div>
         <div className="relative z-10 max-w-md">
           <h1 className="font-display text-4xl font-black tracking-tighter leading-tight mb-4">
@@ -58,7 +58,7 @@ export default function Login() {
       <div className="flex items-center justify-center p-6 sm:p-12">
         <div className="w-full max-w-sm fade-up">
           <div className="lg:hidden mb-8">
-            <img src="/logo.png" alt="logo" className="h-12 w-auto object-contain" />
+            <img src="/logo.png" alt="logo" className="h-10 w-auto object-contain" />
           </div>
           <h2 className="font-display text-3xl font-bold tracking-tight text-zinc-900">Sign in</h2>
           <p className="text-sm text-zinc-500 mt-1 mb-8">Welcome back. Enter your credentials.</p>

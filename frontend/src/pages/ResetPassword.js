@@ -33,7 +33,7 @@ export default function ResetPassword() {
   return (
     <div className="min-h-screen flex items-center justify-center p-6 bg-[#FAFAFA]">
       <div className="w-full max-w-sm fade-up">
-        <img src="/logo.png" alt="logo" className="h-12 w-auto object-contain mb-8" />
+        <img src="/logo.png" alt="logo" className="h-10 w-auto object-contain mb-8" />
         <h2 className="font-display text-2xl font-bold text-zinc-900">Set a new password</h2>
         <p className="text-sm text-zinc-500 mt-1 mb-8">Choose a strong password you'll remember.</p>
         {!token ? (

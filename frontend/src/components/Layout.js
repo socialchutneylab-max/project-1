@@ -23,7 +23,7 @@ export default function Layout() {
       {/* Sidebar */}
       <aside className="w-64 shrink-0 bg-white border-r border-zinc-200 flex flex-col fixed h-screen">
         <div className="px-5 py-6 border-b border-zinc-100">
-          <img src="/logo.png" alt="The Social Chutney Co." className="h-14 w-auto object-contain" data-testid="brand-logo" />
+          <img src="/logo.png" alt="The Social Chutney Co." className="h-10 w-auto object-contain" data-testid="brand-logo" />
         </div>
         <nav className="flex-1 px-3 py-5 space-y-1">
           {NAV.map((item) => {
