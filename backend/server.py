@@ -238,6 +238,9 @@ class TaskIn(BaseModel):
     target_number: Optional[float] = None
     unit: Optional[str] = ""
     goal_id: Optional[str] = None
+    start_time: Optional[str] = ""
+    end_time: Optional[str] = ""
+    sort_order: Optional[int] = 0
 
 
 class TaskUpdate(BaseModel):
@@ -256,6 +259,9 @@ class TaskUpdate(BaseModel):
     review_notes: Optional[str] = None
     date: Optional[str] = None
     saved: Optional[bool] = None
+    start_time: Optional[str] = None
+    end_time: Optional[str] = None
+    sort_order: Optional[int] = None
 
 
 class SaveTasksIn(BaseModel):
@@ -268,6 +274,19 @@ class SaveTasksIn(BaseModel):
 class BatchTasksIn(BaseModel):
     model_config = ConfigDict(extra="ignore")
     task_ids: list[str]
+
+
+class TaskScheduleItem(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str
+    sort_order: Optional[int] = 0
+    start_time: Optional[str] = None
+    end_time: Optional[str] = None
+
+
+class ReorderTasksIn(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    items: list[TaskScheduleItem]
 
 
 class GoogleSheetConfigIn(BaseModel):
@@ -671,7 +690,7 @@ async def list_tasks(
             stmt = stmt.where(Task.saved == True)
         else:
             stmt = stmt.where((Task.saved == False) | (Task.saved.is_(None)))
-    tasks = (await db.execute(stmt.order_by(Task.date.desc(), Task.created_at.asc()))).scalars().all()
+    tasks = (await db.execute(stmt.order_by(Task.date.desc(), Task.sort_order.asc(), Task.start_time.asc(), Task.created_at.asc()))).scalars().all()
     return [serialize_task(t) for t in tasks]
 
 
@@ -701,7 +720,7 @@ async def update_task(task_id: str, payload: TaskUpdate, user: dict = Depends(ge
         raise HTTPException(status_code=404, detail="Task not found")
     data = {k: v for k, v in payload.model_dump().items() if v is not None}
     if user.get("role") != "founder":
-        allowed = {"status", "committed_time", "delay_reason", "output_link", "saved"}
+        allowed = {"status", "committed_time", "delay_reason", "output_link", "saved", "start_time", "end_time", "sort_order"}
         data = {k: v for k, v in data.items() if k in allowed}
     elif data.get("task_type") in ("Founder Task", "Designer Task"):
         data["assigned_to"] = "Founder" if data["task_type"] == "Founder Task" else "Designer"
@@ -836,6 +855,9 @@ async def clone_tasks_to_today(payload: BatchTasksIn, user: dict = Depends(get_c
             auto_generated=False,
             saved=False,
             saved_at=None,
+            start_time=t.start_time or "",
+            end_time=t.end_time or "",
+            sort_order=t.sort_order or 0,
         )
         db.add(new_task)
         new_tasks.append(new_task)
@@ -850,6 +872,20 @@ async def clone_tasks_to_today(payload: BatchTasksIn, user: dict = Depends(get_c
         "message": f"Added {len(new_tasks)} task(s) to today's active tasks.",
         "tasks": [serialize_task(nt) for nt in new_tasks],
     }
+
+
+@api_router.post("/tasks/reorder")
+async def reorder_tasks(payload: ReorderTasksIn, user: dict = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    for item in payload.items:
+        task = (await db.execute(select(Task).where(Task.id == item.id))).scalar_one_or_none()
+        if task:
+            task.sort_order = item.sort_order
+            if item.start_time is not None:
+                task.start_time = item.start_time
+            if item.end_time is not None:
+                task.end_time = item.end_time
+    await db.commit()
+    return {"success": True, "message": "Tasks schedule and order updated"}
 
 
 @api_router.get("/settings/google-sheet")
@@ -1052,6 +1088,9 @@ async def init_db_schema():
         async with engine.begin() as conn:
             await conn.execute(text("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS saved BOOLEAN DEFAULT FALSE;"))
             await conn.execute(text("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS saved_at TIMESTAMPTZ;"))
+            await conn.execute(text("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS start_time VARCHAR(20) DEFAULT '';"))
+            await conn.execute(text("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS end_time VARCHAR(20) DEFAULT '';"))
+            await conn.execute(text("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS sort_order INTEGER DEFAULT 0;"))
             await conn.execute(text("""
                 CREATE TABLE IF NOT EXISTS app_settings (
                     key VARCHAR(100) PRIMARY KEY,

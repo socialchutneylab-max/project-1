@@ -64,6 +64,9 @@ class Task(Base):
     auto_generated = Column(Boolean, default=False)
     saved = Column(Boolean, default=False, index=True)
     saved_at = Column(DateTime(timezone=True), nullable=True)
+    start_time = Column(String(20), default="", nullable=True)
+    end_time = Column(String(20), default="", nullable=True)
+    sort_order = Column(Integer, default=0, nullable=True)
     created_at = Column(DateTime(timezone=True), default=utcnow)
 
 
