@@ -28,18 +28,65 @@ import {
 } from "../lib/constants";
 
 // ---------------------------------------------------------------------------
-// Time helpers
+// 12-Hour Time Helpers & Component (After 12 PM, goes to 1, 2, 3 PM)
 // ---------------------------------------------------------------------------
+const HOURS_12 = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12"];
+const MINUTES_LIST = ["00", "05", "10", "15", "20", "25", "30", "35", "40", "45", "50", "55"];
+
+function parseTo12(timeStr) {
+  if (!timeStr) return { hour: "9", minute: "00", ampm: "AM" };
+  const str = String(timeStr).trim();
+  const ampmMatch = str.match(/(am|pm)/i);
+  let ampm = "AM";
+  let clean = str;
+  if (ampmMatch) {
+    ampm = ampmMatch[0].toUpperCase();
+    clean = str.replace(/(am|pm)/i, "").trim();
+  }
+  const parts = clean.split(":");
+  let h = parseInt(parts[0], 10);
+  const m = (parts[1] || "00").slice(0, 2);
+  if (isNaN(h)) return { hour: "9", minute: "00", ampm: "AM" };
+
+  if (!ampmMatch) {
+    // 24h format e.g. "13:00" -> 1:00 PM
+    if (h >= 12) {
+      ampm = "PM";
+      h = h === 12 ? 12 : h % 12;
+    } else {
+      ampm = "AM";
+      h = h === 0 ? 12 : h;
+    }
+  } else {
+    if (h === 0) h = 12;
+    if (h > 12) {
+      ampm = "PM";
+      h = h % 12 || 12;
+    }
+  }
+  return {
+    hour: String(h),
+    minute: m.padStart(2, "0"),
+    ampm,
+  };
+}
+
+function formatTo24(hour12, minute, ampm) {
+  let h = parseInt(hour12, 10);
+  if (isNaN(h)) h = 9;
+  if (ampm === "AM") {
+    if (h === 12) h = 0;
+  } else {
+    // PM: after 12:00 PM, 1 PM -> 13, 2 PM -> 14, 3 PM -> 15
+    if (h !== 12) h += 12;
+  }
+  return `${String(h).padStart(2, "0")}:${String(minute || "00").padStart(2, "0")}`;
+}
+
 function formatTime12(timeStr) {
   if (!timeStr) return "";
-  const parts = timeStr.split(":");
-  if (parts.length < 2) return timeStr;
-  let h = parseInt(parts[0], 10);
-  const m = parts[1].slice(0, 2) || "00";
-  if (isNaN(h)) return timeStr;
-  const ampm = h >= 12 ? "PM" : "AM";
-  h = h % 12 || 12;
-  return `${h}:${m.padStart(2, "0")} ${ampm}`;
+  const { hour, minute, ampm } = parseTo12(timeStr);
+  return `${hour}:${minute} ${ampm}`;
 }
 
 function formatTimeSlot(start, end) {
@@ -51,7 +98,9 @@ function formatTimeSlot(start, end) {
 
 function addHoursToTime(timeStr, hours) {
   if (!timeStr) return "";
-  const [hStr, mStr] = timeStr.split(":");
+  const { hour, minute, ampm } = parseTo12(timeStr);
+  const h24 = formatTo24(hour, minute, ampm);
+  const [hStr, mStr] = h24.split(":");
   let totalMinutes = parseInt(hStr || "9", 10) * 60 + parseInt(mStr || "0", 10);
   totalMinutes += Math.round(Number(hours || 1) * 60);
   const newH = Math.floor(totalMinutes / 60) % 24;
@@ -61,12 +110,149 @@ function addHoursToTime(timeStr, hours) {
 
 function calculateHoursDifference(start, end) {
   if (!start || !end) return null;
-  const [h1, m1] = start.split(":").map(Number);
-  const [h2, m2] = end.split(":").map(Number);
+  const p1 = parseTo12(start);
+  const p2 = parseTo12(end);
+  const [h1, m1] = formatTo24(p1.hour, p1.minute, p1.ampm).split(":").map(Number);
+  const [h2, m2] = formatTo24(p2.hour, p2.minute, p2.ampm).split(":").map(Number);
   let diffMin = (h2 * 60 + m2) - (h1 * 60 + m1);
   if (diffMin < 0) diffMin += 24 * 60;
   const diffHours = diffMin / 60;
   return Math.round(diffHours * 10) / 10;
+}
+
+// 12-Hour Time Picker Component (Dropdowns for Hour 1-12, Minute 00-55, and AM/PM buttons)
+function TimePicker12({ value, onChange, disabled, className }) {
+  const { hour, minute, ampm } = parseTo12(value);
+
+  const update = (newH, newM, newAmpm) => {
+    onChange(formatTo24(newH, newM, newAmpm));
+  };
+
+  return (
+    <div className={`flex flex-wrap items-center gap-1.5 ${className || ""}`}>
+      {/* Hour: 1 to 12 */}
+      <Select
+        value={hour}
+        onValueChange={(h) => update(h, minute, ampm)}
+        disabled={disabled}
+      >
+        <SelectTrigger className="h-8 w-[62px] text-xs font-semibold px-2 bg-white text-zinc-900 border-zinc-200">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent className="max-h-56">
+          {HOURS_12.map((h) => (
+            <SelectItem key={h} value={h} className="text-xs font-semibold">
+              {h}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+
+      <span className="text-zinc-400 font-bold text-xs">:</span>
+
+      {/* Minute: 00 to 55 */}
+      <Select
+        value={minute}
+        onValueChange={(m) => update(hour, m, ampm)}
+        disabled={disabled}
+      >
+        <SelectTrigger className="h-8 w-[64px] text-xs font-semibold px-2 bg-white text-zinc-900 border-zinc-200">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent className="max-h-56">
+          {MINUTES_LIST.map((m) => (
+            <SelectItem key={m} value={m} className="text-xs font-semibold">
+              {m}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+
+      {/* AM / PM Toggle */}
+      <div className="inline-flex rounded-md border border-zinc-200 bg-zinc-100 p-0.5 shrink-0">
+        <button
+          type="button"
+          disabled={disabled}
+          onClick={() => update(hour, minute, "AM")}
+          className={`px-2 py-1 text-[11px] font-bold rounded transition-all ${
+            ampm === "AM"
+              ? "bg-white text-emerald-800 shadow-xs border border-zinc-200/50"
+              : "text-zinc-500 hover:text-zinc-800"
+          }`}
+        >
+          AM
+        </button>
+        <button
+          type="button"
+          disabled={disabled}
+          onClick={() => update(hour, minute, "PM")}
+          className={`px-2 py-1 text-[11px] font-bold rounded transition-all ${
+            ampm === "PM"
+              ? "bg-white text-emerald-800 shadow-xs border border-zinc-200/50"
+              : "text-zinc-500 hover:text-zinc-800"
+          }`}
+        >
+          PM
+        </button>
+      </div>
+
+      {/* Live 12h badge */}
+      <span className="text-xs font-bold text-emerald-800 bg-emerald-50 px-2 py-1 rounded border border-emerald-200/60 shrink-0">
+        {formatTime12(formatTo24(hour, minute, ampm))}
+      </span>
+    </div>
+  );
+}
+
+// 12-Hour Schedule Filter Options
+const TIMING_FILTER_OPTIONS = [
+  { value: "morning", label: "Morning (9:00 AM – 12:00 PM)" },
+  { value: "afternoon", label: "Afternoon (12:00 PM – 4:00 PM)" },
+  { value: "evening", label: "Evening (4:00 PM – 8:00 PM)" },
+  { value: "slot_9_11", label: "9:00 AM – 11:00 AM" },
+  { value: "slot_11_1", label: "11:00 AM – 1:00 PM" },
+  { value: "slot_1_3", label: "1:00 PM – 3:00 PM" },
+  { value: "slot_3_5", label: "3:00 PM – 5:00 PM" },
+  { value: "slot_5_8", label: "5:00 PM – 8:00 PM" },
+  { value: "unscheduled", label: "Unscheduled Tasks" },
+];
+
+function matchesTiming(task, timingKey) {
+  if (!timingKey || timingKey === "all") return true;
+  const s = task.start_time;
+  if (timingKey === "unscheduled") return !s;
+  if (!s) return false;
+
+  const parts = s.split(":");
+  const h = parseInt(parts[0], 10);
+  const m = parseInt(parts[1] || "0", 10);
+  const mins = h * 60 + m;
+
+  if (timingKey === "morning") {
+    return mins >= 6 * 60 && mins < 12 * 60;
+  }
+  if (timingKey === "afternoon") {
+    return mins >= 12 * 60 && mins < 16 * 60;
+  }
+  if (timingKey === "evening") {
+    return mins >= 16 * 60 && mins <= 22 * 60;
+  }
+  if (timingKey === "slot_9_11") {
+    return mins >= 9 * 60 && mins < 11 * 60;
+  }
+  if (timingKey === "slot_11_1") {
+    return mins >= 11 * 60 && mins < 13 * 60;
+  }
+  if (timingKey === "slot_1_3") {
+    return mins >= 13 * 60 && mins < 15 * 60;
+  }
+  if (timingKey === "slot_3_5") {
+    return mins >= 15 * 60 && mins < 17 * 60;
+  }
+  if (timingKey === "slot_5_8") {
+    return mins >= 17 * 60 && mins <= 20 * 60;
+  }
+  return true;
 }
 
 const Badge = ({ className, children }) => (
@@ -172,28 +358,23 @@ function QuickTimeModal({ open, onOpenChange, task, onSaved }) {
         </DialogHeader>
 
         <div className="space-y-4 py-2">
-          <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-3">
             <div className="space-y-1">
-              <Label className="text-xs text-zinc-600">Start Time</Label>
-              <Input
-                type="time"
+              <Label className="text-xs text-zinc-600 font-semibold">Start Time (12-Hour System)</Label>
+              <TimePicker12
                 value={startTime}
-                onChange={(e) => {
-                  const s = e.target.value;
+                onChange={(s) => {
                   setStartTime(s);
                   const hrs = Number(task.committed_time || task.manager_deadline || 1);
                   setEndTime(addHoursToTime(s, hrs));
                 }}
-                className="text-xs font-mono"
               />
             </div>
             <div className="space-y-1">
-              <Label className="text-xs text-zinc-600">End Time</Label>
-              <Input
-                type="time"
+              <Label className="text-xs text-zinc-600 font-semibold">End Time (12-Hour System)</Label>
+              <TimePicker12
                 value={endTime}
-                onChange={(e) => setEndTime(e.target.value)}
-                className="text-xs font-mono"
+                onChange={(en) => setEndTime(en)}
               />
             </div>
           </div>
@@ -210,16 +391,19 @@ function QuickTimeModal({ open, onOpenChange, task, onSaved }) {
             </div>
           )}
 
-          {/* Quick presets */}
+          {/* Quick presets (12-hour format) */}
           <div className="space-y-1.5">
-            <p className="text-[11px] font-semibold text-zinc-500 uppercase tracking-wider">Quick Presets</p>
+            <p className="text-[11px] font-semibold text-zinc-500 uppercase tracking-wider">Quick Presets (12-Hour)</p>
             <div className="flex flex-wrap gap-1.5">
               {[
-                ["09:00", "11:00", "9:00 AM – 11:00 AM"],
-                ["11:00", "13:00", "11:00 AM – 1:00 PM"],
-                ["13:00", "15:00", "1:00 PM – 3:00 PM"],
-                ["14:00", "17:00", "2:00 PM – 5:00 PM"],
-                ["15:00", "18:00", "3:00 PM – 6:00 PM"],
+                ["09:00", "10:00", "9:00 AM – 10:00 AM (1 hr)"],
+                ["09:00", "11:00", "9:00 AM – 11:00 AM (2 hrs)"],
+                ["11:00", "13:00", "11:00 AM – 1:00 PM (2 hrs)"],
+                ["13:00", "15:00", "1:00 PM – 3:00 PM (2 hrs)"],
+                ["13:00", "16:00", "1:00 PM – 4:00 PM (3 hrs)"],
+                ["14:00", "16:00", "2:00 PM – 4:00 PM (2 hrs)"],
+                ["15:00", "18:00", "3:00 PM – 6:00 PM (3 hrs)"],
+                ["16:00", "19:00", "4:00 PM – 7:00 PM (3 hrs)"],
               ].map(([s, e, label]) => (
                 <button
                   key={label}
@@ -261,9 +445,34 @@ function QuickTimeModal({ open, onOpenChange, task, onSaved }) {
         </div>
 
         <DialogFooter className="flex items-center justify-between sm:justify-between">
-          <Button variant="ghost" size="sm" onClick={() => onOpenChange(false)} className="text-xs">
-            Cancel
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" size="sm" onClick={() => onOpenChange(false)} className="text-xs">
+              Cancel
+            </Button>
+            {task.start_time && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={async () => {
+                  setSaving(true);
+                  try {
+                    await api.put(`/tasks/${task.id}`, { start_time: "", end_time: "" });
+                    toast.success("Schedule cleared");
+                    onSaved();
+                    onOpenChange(false);
+                  } catch {
+                    toast.error("Failed to clear schedule");
+                  } finally {
+                    setSaving(false);
+                  }
+                }}
+                disabled={saving}
+                className="text-xs text-red-600 border-red-200 hover:bg-red-50"
+              >
+                Clear
+              </Button>
+            )}
+          </div>
           <Button
             size="sm"
             onClick={handleSave}
@@ -373,11 +582,9 @@ function AutoScheduleModal({ open, onOpenChange, tasks, onSaved }) {
               <p className="text-[11px] text-emerald-800">All tasks will be scheduled consecutively starting from this time.</p>
             </div>
             <div className="flex items-center gap-2">
-              <Input
-                type="time"
+              <TimePicker12
                 value={startWorkday}
-                onChange={(e) => handleStartTimeChange(e.target.value)}
-                className="w-32 h-8 text-xs bg-white font-mono"
+                onChange={handleStartTimeChange}
               />
             </div>
           </div>
@@ -687,30 +894,37 @@ function TaskForm({ open, onOpenChange, initial, onSaved, mode }) {
         return <Field key={key} label="Priority"><SelectField fk="priority" options={PRIORITIES} form={form} set={set} disabled={designerLocked} /></Field>;
       case "start_time":
         return (
-          <Field key={key} label="Start Time (Schedule)">
-            <Input
-              type="time"
-              value={form.start_time || ""}
-              onChange={(e) => {
-                const s = e.target.value;
-                set("start_time", s);
-                const hrs = Number(form.committed_time || form.manager_deadline);
-                if (s && hrs > 0 && !form.end_time) {
-                  set("end_time", addHoursToTime(s, hrs));
-                }
-              }}
-              className="text-xs font-mono"
-            />
+          <Field key={key} label="Start Time (12-Hour System)">
+            <div className="space-y-1">
+              <TimePicker12
+                value={form.start_time || "09:00"}
+                onChange={(s) => {
+                  set("start_time", s);
+                  const hrs = Number(form.committed_time || form.manager_deadline);
+                  if (s && hrs > 0 && !form.end_time) {
+                    set("end_time", addHoursToTime(s, hrs));
+                  }
+                }}
+                disabled={designerLocked}
+              />
+              {form.start_time && (
+                <button
+                  type="button"
+                  onClick={() => { set("start_time", ""); set("end_time", ""); }}
+                  className="text-[10px] text-zinc-400 hover:text-red-500 underline"
+                >
+                  Clear schedule
+                </button>
+              )}
+            </div>
           </Field>
         );
       case "end_time":
         return (
-          <Field key={key} label="End Time (Schedule)">
-            <Input
-              type="time"
-              value={form.end_time || ""}
-              onChange={(e) => {
-                const en = e.target.value;
+          <Field key={key} label="End Time (12-Hour System)">
+            <TimePicker12
+              value={form.end_time || (form.start_time ? addHoursToTime(form.start_time, 2) : "11:00")}
+              onChange={(en) => {
                 set("end_time", en);
                 if (form.start_time && en) {
                   const diff = calculateHoursDifference(form.start_time, en);
@@ -719,7 +933,7 @@ function TaskForm({ open, onOpenChange, initial, onSaved, mode }) {
                   }
                 }
               }}
-              className="text-xs font-mono"
+              disabled={designerLocked}
             />
           </Field>
         );
@@ -794,7 +1008,7 @@ export default function Tasks() {
   const [autoScheduleOpen, setAutoScheduleOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [filters, setFilters] = useState({
-    date: "", status: ALL, priority: ALL, work_category: ALL,
+    date: "", status: ALL, priority: ALL, work_category: ALL, timing: ALL,
   });
 
   const load = useCallback(async () => {
@@ -818,6 +1032,8 @@ export default function Tasks() {
     load();
     setSelectedIds(new Set());
   }, [load]);
+
+  const visibleTasks = tasks.filter((t) => matchesTiming(t, filters.timing));
 
   const updateStatus = async (task, status) => {
     try {
@@ -846,12 +1062,20 @@ export default function Tasks() {
   };
 
   // Move task up or down and swap timings
-  const handleMoveTask = async (index, delta) => {
-    const newIdx = index + delta;
-    if (newIdx < 0 || newIdx >= tasks.length) return;
+  const handleMoveTask = async (visibleIndex, delta) => {
+    const newVisIdx = visibleIndex + delta;
+    if (newVisIdx < 0 || newVisIdx >= visibleTasks.length) return;
 
-    const taskA = { ...tasks[index] };
-    const taskB = { ...tasks[newIdx] };
+    const taskAId = visibleTasks[visibleIndex]?.id;
+    const taskBId = visibleTasks[newVisIdx]?.id;
+    if (!taskAId || !taskBId) return;
+
+    const idxA = tasks.findIndex((t) => t.id === taskAId);
+    const idxB = tasks.findIndex((t) => t.id === taskBId);
+    if (idxA === -1 || idxB === -1) return;
+
+    const taskA = { ...tasks[idxA] };
+    const taskB = { ...tasks[idxB] };
 
     // Swap time slots if both have scheduled times
     if (taskA.start_time && taskB.start_time) {
@@ -864,8 +1088,8 @@ export default function Tasks() {
     }
 
     const updated = [...tasks];
-    updated[index] = taskB;
-    updated[newIdx] = taskA;
+    updated[idxA] = taskB;
+    updated[idxB] = taskA;
     setTasks(updated);
 
     try {
@@ -972,10 +1196,10 @@ export default function Tasks() {
 
   // Selection toggles
   const toggleSelectAll = () => {
-    if (selectedIds.size === tasks.length && tasks.length > 0) {
+    if (selectedIds.size === visibleTasks.length && visibleTasks.length > 0) {
       setSelectedIds(new Set());
     } else {
-      setSelectedIds(new Set(tasks.map((t) => t.id)));
+      setSelectedIds(new Set(visibleTasks.map((t) => t.id)));
     }
   };
 
@@ -989,7 +1213,7 @@ export default function Tasks() {
   };
 
   const setF = (k, v) => setFilters((f) => ({ ...f, [k]: v }));
-  const clearFilters = () => setFilters({ date: "", status: ALL, priority: ALL, work_category: ALL });
+  const clearFilters = () => setFilters({ date: "", status: ALL, priority: ALL, work_category: ALL, timing: ALL });
   const hasFilters = filters.date || Object.values(filters).some((v) => v && v !== ALL && v !== "");
 
   const FilterSelect = ({ k, placeholder, options, testid }) => (
@@ -1066,7 +1290,7 @@ export default function Tasks() {
           <button
             type="button"
             onClick={() => handleMoveTask(idx, 1)}
-            disabled={idx === tasks.length - 1}
+            disabled={idx === visibleTasks.length - 1}
             className="p-0.5 text-zinc-400 hover:text-zinc-800 disabled:opacity-20"
             title="Move later / Shuffle down"
           >
@@ -1312,6 +1536,19 @@ export default function Tasks() {
         <FilterSelect k="status" placeholder="All Status" options={TASK_STATUSES} testid="filter-status" />
         <FilterSelect k="priority" placeholder="All Priority" options={PRIORITIES} testid="filter-priority" />
         <FilterSelect k="work_category" placeholder="All Categories" options={WORK_CATEGORIES} testid="filter-category" />
+        <Select value={filters.timing} onValueChange={(v) => setF("timing", v)}>
+          <SelectTrigger className="w-[195px] h-9 text-xs" data-testid="filter-timing">
+            <SelectValue placeholder="All Schedules" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={ALL} className="text-xs">All Schedules</SelectItem>
+            {TIMING_FILTER_OPTIONS.map((opt) => (
+              <SelectItem key={opt.value} value={opt.value} className="text-xs">
+                {opt.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
         {hasFilters && (
           <Button variant="ghost" size="sm" onClick={clearFilters} className="h-9 text-zinc-500 text-xs" data-testid="clear-filters">
             <X className="w-4 h-4 mr-1" /> Clear
@@ -1322,7 +1559,7 @@ export default function Tasks() {
       {/* Active Mode: Timeline View vs Table View */}
       {viewMode === "active" && activeSubView === "timeline" ? (
         <TimelineScheduleView
-          tasks={tasks}
+          tasks={visibleTasks}
           onOpenQuickTime={openQuickTime}
           onMoveTask={handleMoveTask}
           onUpdateStatus={updateStatus}
@@ -1337,7 +1574,7 @@ export default function Tasks() {
                   {viewMode === "saved" && (
                     <TableHead className="w-10 px-3 text-center">
                       <Checkbox
-                        checked={tasks.length > 0 && selectedIds.size === tasks.length}
+                        checked={visibleTasks.length > 0 && selectedIds.size === visibleTasks.length}
                         onCheckedChange={toggleSelectAll}
                         aria-label="Select all tasks"
                       />
@@ -1357,16 +1594,18 @@ export default function Tasks() {
                       Loading tasks...
                     </TableCell>
                   </TableRow>
-                ) : tasks.length === 0 ? (
+                ) : visibleTasks.length === 0 ? (
                   <TableRow>
                     <TableCell colCount={colCount} className="text-center py-12 text-zinc-400">
-                      {viewMode === "saved"
+                      {hasFilters
+                        ? "No tasks match the selected filters."
+                        : viewMode === "saved"
                         ? "No saved tasks in history for this filter."
                         : "No active tasks. Create a new task or pick tasks from Saved History to work on today!"}
                     </TableCell>
                   </TableRow>
                 ) : (
-                  tasks.map((t, idx) => (
+                  visibleTasks.map((t, idx) => (
                     <TableRow key={t.id} data-testid={`task-row-${t.id}`} className="align-top hover:bg-zinc-50/50">
                       {viewMode === "saved" && (
                         <TableCell className="w-10 px-3 text-center pt-3.5">

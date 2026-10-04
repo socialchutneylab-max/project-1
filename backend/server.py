@@ -670,6 +670,7 @@ async def list_tasks(
     priority: Optional[str] = Query(None),
     work_category: Optional[str] = Query(None),
     saved: Optional[bool] = Query(None),
+    timing: Optional[str] = Query(None),
 ):
     await ensure_tasks_for_date(db, datetime.now().date())
     stmt = select(Task)
@@ -690,6 +691,25 @@ async def list_tasks(
             stmt = stmt.where(Task.saved == True)
         else:
             stmt = stmt.where((Task.saved == False) | (Task.saved.is_(None)))
+    if timing:
+        if timing == "morning":
+            stmt = stmt.where(Task.start_time >= "06:00", Task.start_time < "12:00")
+        elif timing == "afternoon":
+            stmt = stmt.where(Task.start_time >= "12:00", Task.start_time < "16:00")
+        elif timing == "evening":
+            stmt = stmt.where(Task.start_time >= "16:00", Task.start_time <= "22:00")
+        elif timing == "slot_9_11":
+            stmt = stmt.where(Task.start_time >= "09:00", Task.start_time < "11:00")
+        elif timing == "slot_11_1":
+            stmt = stmt.where(Task.start_time >= "11:00", Task.start_time < "13:00")
+        elif timing == "slot_1_3":
+            stmt = stmt.where(Task.start_time >= "13:00", Task.start_time < "15:00")
+        elif timing == "slot_3_5":
+            stmt = stmt.where(Task.start_time >= "15:00", Task.start_time < "17:00")
+        elif timing == "slot_5_8":
+            stmt = stmt.where(Task.start_time >= "17:00", Task.start_time <= "20:00")
+        elif timing == "unscheduled":
+            stmt = stmt.where((Task.start_time == "") | (Task.start_time.is_(None)))
     tasks = (await db.execute(stmt.order_by(Task.date.desc(), Task.sort_order.asc(), Task.start_time.asc(), Task.created_at.asc()))).scalars().all()
     return [serialize_task(t) for t in tasks]
 
