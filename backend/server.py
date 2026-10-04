@@ -20,12 +20,12 @@ from urllib.parse import urlparse
 from fastapi import FastAPI, APIRouter, HTTPException, Request, Response, Depends, BackgroundTasks, Query
 from starlette.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, ConfigDict
-from sqlalchemy import select, func, delete, update
+from sqlalchemy import select, func, delete, update, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.inspection import inspect as sa_inspect
 
-from database import AsyncSessionLocal, get_db
-from models import User, Goal, Task, LoginAttempt, PasswordResetRequest, PasswordResetToken, utcnow
+from database import AsyncSessionLocal, get_db, engine
+from models import User, Goal, Task, LoginAttempt, PasswordResetRequest, PasswordResetToken, AppSetting, utcnow
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -255,6 +255,19 @@ class TaskUpdate(BaseModel):
     output_link: Optional[str] = None
     review_notes: Optional[str] = None
     date: Optional[str] = None
+    saved: Optional[bool] = None
+
+
+class SaveTasksIn(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    task_ids: Optional[list[str]] = None
+    date: Optional[str] = None
+    task_type: Optional[str] = None
+
+
+class GoogleSheetConfigIn(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    webhook_url: str
 
 
 # ---------------------------------------------------------------------------
@@ -456,10 +469,116 @@ async def ensure_tasks_for_date(db: AsyncSession, d: date):
             unit=goal.unit or "",
             goal_id=goal.id,
             auto_generated=True,
+            saved=False,
         ))
         created = True
     if created:
         await db.commit()
+
+
+# ---------------------------------------------------------------------------
+# App Settings
+# ---------------------------------------------------------------------------
+async def get_setting(db: AsyncSession, key: str, default: str = "") -> str:
+    try:
+        setting = (await db.execute(select(AppSetting).where(AppSetting.key == key))).scalar_one_or_none()
+        if setting and setting.value:
+            return setting.value
+    except Exception:
+        pass
+    return os.environ.get(key, default)
+
+
+async def set_setting(db: AsyncSession, key: str, value: str):
+    setting = (await db.execute(select(AppSetting).where(AppSetting.key == key))).scalar_one_or_none()
+    if setting:
+        setting.value = value
+        setting.updated_at = datetime.now(timezone.utc)
+    else:
+        db.add(AppSetting(key=key, value=value))
+    await db.commit()
+
+
+# ---------------------------------------------------------------------------
+# Google Sheet Sync Helpers
+# ---------------------------------------------------------------------------
+GOOGLE_SPREADSHEET_ID = "1VWhguGAkq0kMkodHSLzrfjjfCg-Hb_3zcTE-U0EQvDE"
+GOOGLE_SPREADSHEET_URL = f"https://docs.google.com/spreadsheets/d/{GOOGLE_SPREADSHEET_ID}/edit"
+
+FOUNDER_HEADERS = [
+    "Date", "Task Name", "Task Category", "Objective / Brief", "Priority",
+    "Est. Completion Time (hrs)", "Current Status", "Delay Reason",
+    "Review Notes / Next Action", "Output Link"
+]
+
+DESIGNER_HEADERS = [
+    "Date", "Task Name", "Client / Work Type", "Objective / Brief", "Priority",
+    "Manager Deadline (hrs)", "Designer Committed Time (hrs)", "Current Status",
+    "Delay Reason", "Output Link", "Review Notes / Changes"
+]
+
+
+def format_founder_task_row(task: Task) -> list:
+    name = task.task_name or ""
+    if task.target_number is not None and task.target_number != "":
+        unit_str = f" {task.unit}" if task.unit else ""
+        name = f"{name} — {task.target_number}{unit_str}"
+    return [
+        task.date or "",
+        name,
+        task.work_category or "",
+        task.brief or "",
+        task.priority or "",
+        str(task.committed_time or "") if task.committed_time is not None else "",
+        task.status or "",
+        task.delay_reason or "",
+        task.review_notes or "",
+        task.output_link or "",
+    ]
+
+
+def format_designer_task_row(task: Task) -> list:
+    return [
+        task.date or "",
+        task.task_name or "",
+        task.work_category or "",
+        task.brief or "",
+        task.priority or "",
+        str(task.manager_deadline or "") if task.manager_deadline is not None else "",
+        str(task.committed_time or "") if task.committed_time is not None else "",
+        task.status or "",
+        task.delay_reason or "",
+        task.output_link or "",
+        task.review_notes or "",
+    ]
+
+
+async def sync_tasks_to_google_sheet(webhook_url: str, founder_tasks: list[Task], designer_tasks: list[Task]) -> dict:
+    if not webhook_url:
+        return {"synced": False, "message": "Google Sheet Webhook URL not configured. Configure it in Task Sheet Settings."}
+
+    payload = {
+        "spreadsheet_id": GOOGLE_SPREADSHEET_ID,
+        "founder_headers": FOUNDER_HEADERS,
+        "founder_tasks": [format_founder_task_row(t) for t in founder_tasks],
+        "designer_headers": DESIGNER_HEADERS,
+        "designer_tasks": [format_designer_task_row(t) for t in designer_tasks],
+    }
+
+    try:
+        async with httpx.AsyncClient(follow_redirects=True, timeout=25.0) as client:
+            resp = await client.post(webhook_url, json=payload)
+            if resp.status_code in (200, 201, 302):
+                try:
+                    data = resp.json()
+                    msg = data.get("message") or "Successfully synced to Google Sheet"
+                except Exception:
+                    msg = "Successfully synced to Google Sheet"
+                return {"synced": True, "message": msg}
+            return {"synced": False, "message": f"Google Sheet Webhook returned HTTP {resp.status_code}"}
+    except Exception as e:
+        logger.error(f"Google Sheet sync error: {e}")
+        return {"synced": False, "message": f"Webhook connection error: {str(e)}"}
 
 
 # ---------------------------------------------------------------------------
@@ -526,6 +645,7 @@ async def list_tasks(
     status: Optional[str] = Query(None),
     priority: Optional[str] = Query(None),
     work_category: Optional[str] = Query(None),
+    saved: Optional[bool] = Query(None),
 ):
     await ensure_tasks_for_date(db, datetime.now().date())
     stmt = select(Task)
@@ -541,7 +661,12 @@ async def list_tasks(
         stmt = stmt.where(Task.priority == priority)
     if work_category:
         stmt = stmt.where(Task.work_category == work_category)
-    tasks = (await db.execute(stmt.order_by(Task.date.desc()))).scalars().all()
+    if saved is not None:
+        if saved:
+            stmt = stmt.where(Task.saved == True)
+        else:
+            stmt = stmt.where((Task.saved == False) | (Task.saved.is_(None)))
+    tasks = (await db.execute(stmt.order_by(Task.date.desc(), Task.created_at.asc()))).scalars().all()
     return [serialize_task(t) for t in tasks]
 
 
@@ -556,6 +681,7 @@ async def create_task(payload: TaskIn, user: dict = Depends(get_current_user), d
     data["task_type"] = tt
     data["assigned_to"] = "Founder" if tt == "Founder Task" else "Designer"
     data["auto_generated"] = False
+    data["saved"] = False
     task = Task(**data)
     db.add(task)
     await db.commit()
@@ -570,7 +696,7 @@ async def update_task(task_id: str, payload: TaskUpdate, user: dict = Depends(ge
         raise HTTPException(status_code=404, detail="Task not found")
     data = {k: v for k, v in payload.model_dump().items() if v is not None}
     if user.get("role") != "founder":
-        allowed = {"status", "committed_time", "delay_reason", "output_link"}
+        allowed = {"status", "committed_time", "delay_reason", "output_link", "saved"}
         data = {k: v for k, v in data.items() if k in allowed}
     elif data.get("task_type") in ("Founder Task", "Designer Task"):
         data["assigned_to"] = "Founder" if data["task_type"] == "Founder Task" else "Designer"
@@ -586,6 +712,119 @@ async def delete_task(task_id: str, user: dict = Depends(require_founder), db: A
     await db.execute(delete(Task).where(Task.id == task_id))
     await db.commit()
     return {"message": "Task deleted"}
+
+
+@api_router.post("/tasks/save")
+async def save_tasks(payload: SaveTasksIn, user: dict = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    stmt = select(Task)
+    if payload.task_ids:
+        stmt = stmt.where(Task.id.in_(payload.task_ids))
+    else:
+        if payload.date:
+            stmt = stmt.where(Task.date == payload.date)
+        if payload.task_type:
+            stmt = stmt.where(Task.task_type == payload.task_type)
+        stmt = stmt.where((Task.saved == False) | (Task.saved.is_(None)))
+
+    tasks = (await db.execute(stmt)).scalars().all()
+    if not tasks:
+        return {
+            "success": True,
+            "saved_count": 0,
+            "sheet_synced": False,
+            "message": "No active tasks found to save.",
+            "tasks": []
+        }
+
+    now = datetime.now(timezone.utc)
+    for t in tasks:
+        t.saved = True
+        t.saved_at = now
+
+    await db.commit()
+
+    founder_tasks = [t for t in tasks if t.task_type == "Founder Task"]
+    designer_tasks = [t for t in tasks if t.task_type != "Founder Task"]
+
+    webhook_url = await get_setting(db, "GOOGLE_SHEET_WEBHOOK_URL")
+    sync_res = await sync_tasks_to_google_sheet(webhook_url, founder_tasks, designer_tasks)
+
+    return {
+        "success": True,
+        "saved_count": len(tasks),
+        "sheet_synced": sync_res["synced"],
+        "sheet_message": sync_res["message"],
+        "tasks": [serialize_task(t) for t in tasks],
+    }
+
+
+@api_router.post("/tasks/{task_id}/save")
+async def save_single_task(task_id: str, user: dict = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    task = (await db.execute(select(Task).where(Task.id == task_id))).scalar_one_or_none()
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    task.saved = True
+    task.saved_at = datetime.now(timezone.utc)
+    await db.commit()
+
+    founder_tasks = [task] if task.task_type == "Founder Task" else []
+    designer_tasks = [task] if task.task_type != "Founder Task" else []
+
+    webhook_url = await get_setting(db, "GOOGLE_SHEET_WEBHOOK_URL")
+    sync_res = await sync_tasks_to_google_sheet(webhook_url, founder_tasks, designer_tasks)
+
+    return {
+        "success": True,
+        "saved_count": 1,
+        "sheet_synced": sync_res["synced"],
+        "sheet_message": sync_res["message"],
+        "task": serialize_task(task),
+    }
+
+
+@api_router.get("/settings/google-sheet")
+async def get_google_sheet_settings(user: dict = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    webhook_url = await get_setting(db, "GOOGLE_SHEET_WEBHOOK_URL")
+    return {
+        "webhook_url": webhook_url,
+        "spreadsheet_id": GOOGLE_SPREADSHEET_ID,
+        "spreadsheet_url": GOOGLE_SPREADSHEET_URL,
+        "is_configured": bool(webhook_url),
+        "sheet_mapping": {
+            "sheet_1": "Founder Task Management",
+            "sheet_2": "Designer Task Management",
+        }
+    }
+
+
+@api_router.post("/settings/google-sheet")
+async def update_google_sheet_settings(payload: GoogleSheetConfigIn, user: dict = Depends(require_founder), db: AsyncSession = Depends(get_db)):
+    url = payload.webhook_url.strip()
+    await set_setting(db, "GOOGLE_SHEET_WEBHOOK_URL", url)
+    return {
+        "status": "success",
+        "webhook_url": url,
+        "message": "Google Sheet Webhook URL saved successfully",
+    }
+
+
+@api_router.post("/settings/google-sheet/test")
+async def test_google_sheet_settings(payload: GoogleSheetConfigIn, user: dict = Depends(require_founder)):
+    url = payload.webhook_url.strip()
+    if not url:
+        raise HTTPException(status_code=400, detail="Webhook URL is empty")
+    try:
+        async with httpx.AsyncClient(follow_redirects=True, timeout=15.0) as client:
+            resp = await client.get(url)
+            if resp.status_code == 200:
+                return {"connected": True, "message": "Successfully connected to Google Apps Script Webhook!"}
+            post_resp = await client.post(url, json={"ping": True})
+            if post_resp.status_code in (200, 201, 302):
+                return {"connected": True, "message": "Successfully connected to Google Apps Script Webhook!"}
+            return {"connected": False, "message": f"Webhook returned HTTP {resp.status_code}"}
+    except Exception as e:
+        return {"connected": False, "message": f"Connection error: {str(e)}"}
 
 
 # ---------------------------------------------------------------------------
@@ -728,8 +967,25 @@ async def seed_users():
         await db.commit()
 
 
+async def init_db_schema():
+    try:
+        async with engine.begin() as conn:
+            await conn.execute(text("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS saved BOOLEAN DEFAULT FALSE;"))
+            await conn.execute(text("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS saved_at TIMESTAMPTZ;"))
+            await conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS app_settings (
+                    key VARCHAR(100) PRIMARY KEY,
+                    value TEXT DEFAULT '',
+                    updated_at TIMESTAMPTZ
+                );
+            """))
+    except Exception as e:
+        logger.warning(f"Schema migration warning: {e}")
+
+
 @app.on_event("startup")
 async def startup():
+    await init_db_schema()
     await seed_users()
 
 

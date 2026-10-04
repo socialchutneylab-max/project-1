@@ -62,7 +62,16 @@ class Task(Base):
     unit = Column(String(100), default="")
     goal_id = Column(String(36), nullable=True, index=True)
     auto_generated = Column(Boolean, default=False)
+    saved = Column(Boolean, default=False, index=True)
+    saved_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), default=utcnow)
+
+
+class AppSetting(Base):
+    __tablename__ = "app_settings"
+    key = Column(String(100), primary_key=True)
+    value = Column(Text, default="")
+    updated_at = Column(DateTime(timezone=True), default=utcnow)
 
 
 class LoginAttempt(Base):
