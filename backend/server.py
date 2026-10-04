@@ -265,6 +265,11 @@ class SaveTasksIn(BaseModel):
     task_type: Optional[str] = None
 
 
+class BatchTasksIn(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    task_ids: list[str]
+
+
 class GoogleSheetConfigIn(BaseModel):
     model_config = ConfigDict(extra="ignore")
     webhook_url: str
@@ -708,10 +713,27 @@ async def update_task(task_id: str, payload: TaskUpdate, user: dict = Depends(ge
 
 
 @api_router.delete("/tasks/{task_id}")
-async def delete_task(task_id: str, user: dict = Depends(require_founder), db: AsyncSession = Depends(get_db)):
+async def delete_task(task_id: str, user: dict = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    task = (await db.execute(select(Task).where(Task.id == task_id))).scalar_one_or_none()
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    if user.get("role") != "founder" and task.assigned_to != "Designer":
+        raise HTTPException(status_code=403, detail="Not authorized to delete this task")
     await db.execute(delete(Task).where(Task.id == task_id))
     await db.commit()
     return {"message": "Task deleted"}
+
+
+@api_router.post("/tasks/batch-delete")
+async def batch_delete_tasks(payload: BatchTasksIn, user: dict = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    if not payload.task_ids:
+        return {"deleted_count": 0}
+    stmt = delete(Task).where(Task.id.in_(payload.task_ids))
+    if user.get("role") != "founder":
+        stmt = stmt.where(Task.assigned_to == "Designer")
+    res = await db.execute(stmt)
+    await db.commit()
+    return {"deleted_count": res.rowcount or len(payload.task_ids)}
 
 
 @api_router.post("/tasks/save")
@@ -731,7 +753,6 @@ async def save_tasks(payload: SaveTasksIn, user: dict = Depends(get_current_user
         return {
             "success": True,
             "saved_count": 0,
-            "sheet_synced": False,
             "message": "No active tasks found to save.",
             "tasks": []
         }
@@ -743,17 +764,10 @@ async def save_tasks(payload: SaveTasksIn, user: dict = Depends(get_current_user
 
     await db.commit()
 
-    founder_tasks = [t for t in tasks if t.task_type == "Founder Task"]
-    designer_tasks = [t for t in tasks if t.task_type != "Founder Task"]
-
-    webhook_url = await get_setting(db, "GOOGLE_SHEET_WEBHOOK_URL")
-    sync_res = await sync_tasks_to_google_sheet(webhook_url, founder_tasks, designer_tasks)
-
     return {
         "success": True,
         "saved_count": len(tasks),
-        "sheet_synced": sync_res["synced"],
-        "sheet_message": sync_res["message"],
+        "message": f"Successfully saved {len(tasks)} task(s) to history under their date.",
         "tasks": [serialize_task(t) for t in tasks],
     }
 
@@ -768,18 +782,73 @@ async def save_single_task(task_id: str, user: dict = Depends(get_current_user),
     task.saved_at = datetime.now(timezone.utc)
     await db.commit()
 
-    founder_tasks = [task] if task.task_type == "Founder Task" else []
-    designer_tasks = [task] if task.task_type != "Founder Task" else []
-
-    webhook_url = await get_setting(db, "GOOGLE_SHEET_WEBHOOK_URL")
-    sync_res = await sync_tasks_to_google_sheet(webhook_url, founder_tasks, designer_tasks)
-
     return {
         "success": True,
         "saved_count": 1,
-        "sheet_synced": sync_res["synced"],
-        "sheet_message": sync_res["message"],
+        "message": f"Task '{task.task_name}' saved to history.",
         "task": serialize_task(task),
+    }
+
+
+@api_router.post("/tasks/{task_id}/restore")
+async def restore_single_task(task_id: str, user: dict = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    task = (await db.execute(select(Task).where(Task.id == task_id))).scalar_one_or_none()
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    task.saved = False
+    task.saved_at = None
+    await db.commit()
+
+    return {
+        "success": True,
+        "message": f"Task '{task.task_name}' restored to active tasks.",
+        "task": serialize_task(task),
+    }
+
+
+@api_router.post("/tasks/clone-to-today")
+async def clone_tasks_to_today(payload: BatchTasksIn, user: dict = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    if not payload.task_ids:
+        return {"cloned_count": 0, "tasks": []}
+
+    tasks = (await db.execute(select(Task).where(Task.id.in_(payload.task_ids)))).scalars().all()
+    today_str = datetime.now().date().isoformat()
+    new_tasks = []
+    for t in tasks:
+        new_task = Task(
+            date=today_str,
+            task_type=t.task_type,
+            work_category=t.work_category,
+            task_name=t.task_name,
+            assigned_to=t.assigned_to,
+            brief=t.brief,
+            priority=t.priority,
+            manager_deadline=t.manager_deadline,
+            committed_time=t.committed_time,
+            status="Pending",
+            delay_reason="",
+            output_link="",
+            review_notes="",
+            target_number=t.target_number,
+            unit=t.unit,
+            goal_id=t.goal_id,
+            auto_generated=False,
+            saved=False,
+            saved_at=None,
+        )
+        db.add(new_task)
+        new_tasks.append(new_task)
+
+    await db.commit()
+    for nt in new_tasks:
+        await db.refresh(nt)
+
+    return {
+        "success": True,
+        "cloned_count": len(new_tasks),
+        "message": f"Added {len(new_tasks)} task(s) to today's active tasks.",
+        "tasks": [serialize_task(nt) for nt in new_tasks],
     }
 
 
@@ -802,10 +871,21 @@ async def get_google_sheet_settings(user: dict = Depends(get_current_user), db: 
 async def update_google_sheet_settings(payload: GoogleSheetConfigIn, user: dict = Depends(require_founder), db: AsyncSession = Depends(get_db)):
     url = payload.webhook_url.strip()
     await set_setting(db, "GOOGLE_SHEET_WEBHOOK_URL", url)
+    synced_note = ""
+    if url:
+        saved_tasks = (await db.execute(select(Task).where(Task.saved == True))).scalars().all()
+        if saved_tasks:
+            founder_tasks = [t for t in saved_tasks if t.task_type == "Founder Task"]
+            designer_tasks = [t for t in saved_tasks if t.task_type != "Founder Task"]
+            res = await sync_tasks_to_google_sheet(url, founder_tasks, designer_tasks)
+            if res.get("synced"):
+                synced_note = f" Also synced {len(saved_tasks)} previously saved task(s) to Google Sheet!"
+            else:
+                synced_note = f" (Sync test: {res.get('message')})"
     return {
         "status": "success",
         "webhook_url": url,
-        "message": "Google Sheet Webhook URL saved successfully",
+        "message": f"Google Sheet Webhook URL saved successfully.{synced_note}",
     }
 
 

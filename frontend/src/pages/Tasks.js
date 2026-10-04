@@ -5,6 +5,7 @@ import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
 import { Textarea } from "../components/ui/textarea";
+import { Checkbox } from "../components/ui/checkbox";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "../components/ui/dialog";
@@ -18,15 +19,12 @@ import { Tabs, TabsList, TabsTrigger } from "../components/ui/tabs";
 import { toast } from "sonner";
 import {
   Plus, Pencil, Trash2, ExternalLink, Loader2, Filter, X,
-  Save, FileSpreadsheet, History, CheckCircle2, Settings, Copy, Check
+  Save, History, CheckCircle2, PlusCircle, CheckSquare
 } from "lucide-react";
 import {
   WORK_CATEGORIES, PRIORITIES, TASK_STATUSES,
   STATUS_STYLES, PRIORITY_STYLES,
 } from "../lib/constants";
-import { APPS_SCRIPT_CODE } from "../lib/appsScriptCode";
-
-const GOOGLE_SHEET_URL = "https://docs.google.com/spreadsheets/d/1VWhguGAkq0kMkodHSLzrfjjfCg-Hb_3zcTE-U0EQvDE/edit?usp=sharing";
 
 const Badge = ({ className, children }) => (
   <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold border ${className}`}>{children}</span>
@@ -168,168 +166,6 @@ function TaskForm({ open, onOpenChange, initial, onSaved, mode }) {
   );
 }
 
-function GoogleSheetConfigModal({ open, onOpenChange }) {
-  const [webhookUrl, setWebhookUrl] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [testing, setTesting] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [copied, setCopied] = useState(false);
-
-  useEffect(() => {
-    if (open) {
-      setLoading(true);
-      api.get("/settings/google-sheet")
-        .then((res) => {
-          if (res.data?.webhook_url) setWebhookUrl(res.data.webhook_url);
-        })
-        .catch(() => {})
-        .finally(() => setLoading(false));
-    }
-  }, [open]);
-
-  const copyCode = () => {
-    navigator.clipboard.writeText(APPS_SCRIPT_CODE);
-    setCopied(true);
-    toast.success("Apps Script code copied to clipboard!");
-    setTimeout(() => setCopied(false), 2500);
-  };
-
-  const handleTest = async () => {
-    if (!webhookUrl.trim()) {
-      toast.error("Please enter a Webhook URL first");
-      return;
-    }
-    setTesting(true);
-    try {
-      const res = await api.post("/settings/google-sheet/test", { webhook_url: webhookUrl });
-      if (res.data.connected) {
-        toast.success(res.data.message || "Connected to Google Sheet Webhook!");
-      } else {
-        toast.error(res.data.message || "Failed to reach Google Sheet Webhook");
-      }
-    } catch (e) {
-      toast.error(e.response?.data?.detail || "Connection test failed");
-    } finally {
-      setTesting(false);
-    }
-  };
-
-  const handleSave = async () => {
-    setSaving(true);
-    try {
-      await api.post("/settings/google-sheet", { webhook_url: webhookUrl });
-      toast.success("Google Sheet Webhook URL saved!");
-      onOpenChange(false);
-    } catch (e) {
-      toast.error(e.response?.data?.detail || "Failed to save settings");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 font-display text-lg">
-            <FileSpreadsheet className="w-5 h-5 text-emerald-600" />
-            Google Sheet Integration Settings
-          </DialogTitle>
-          <p className="text-xs text-zinc-500">
-            Automatically sync saved tasks to your Google Sheet tabs.
-          </p>
-        </DialogHeader>
-
-        <div className="space-y-4 py-2">
-          {/* Sheet mapping banner */}
-          <div className="bg-emerald-50/60 border border-emerald-200 rounded-lg p-3 text-xs space-y-1">
-            <p className="font-semibold text-emerald-950 flex items-center justify-between">
-              <span>Target Sheet Mapping:</span>
-              <a
-                href={GOOGLE_SHEET_URL}
-                target="_blank"
-                rel="noreferrer"
-                className="text-emerald-700 hover:underline inline-flex items-center gap-0.5"
-              >
-                Open Sheet <ExternalLink className="w-3 h-3" />
-              </a>
-            </p>
-            <p className="text-emerald-900">• <strong>Sheet 1:</strong> Founder Task Management</p>
-            <p className="text-emerald-900">• <strong>Sheet 2:</strong> Designer Task Management</p>
-          </div>
-
-          {/* Setup steps */}
-          <div className="bg-zinc-50 border border-zinc-200 rounded-lg p-3 text-xs space-y-2">
-            <div className="flex items-center justify-between">
-              <span className="font-bold text-zinc-800">Quick 2-Minute Setup:</span>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={copyCode}
-                className="h-7 text-xs gap-1 border-zinc-300"
-              >
-                {copied ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
-                {copied ? "Copied!" : "Copy Apps Script Code"}
-              </Button>
-            </div>
-            <ol className="list-decimal list-inside space-y-1 text-zinc-600">
-              <li>Open your <a href={GOOGLE_SHEET_URL} target="_blank" rel="noreferrer" className="text-emerald-600 underline">Google Sheet</a>, go to <strong>Extensions</strong> &gt; <strong>Apps Script</strong>.</li>
-              <li>Paste the copied script and click the 💾 Save button.</li>
-              <li>Click <strong>Deploy</strong> &gt; <strong>New Deployment</strong> &gt; Select <strong>Web app</strong> (Execute as: <em>Me</em>, Access: <em>Anyone</em>).</li>
-              <li>Copy the generated Web App URL and paste it below.</li>
-            </ol>
-          </div>
-
-          {/* Webhook URL Input */}
-          <div className="space-y-1.5">
-            <Label className="text-xs font-semibold text-zinc-700">Google Apps Script Webhook URL</Label>
-            {loading ? (
-              <div className="h-9 bg-zinc-100 rounded animate-pulse" />
-            ) : (
-              <Input
-                value={webhookUrl}
-                onChange={(e) => setWebhookUrl(e.target.value)}
-                placeholder="https://script.google.com/macros/s/.../exec"
-                className="font-mono text-xs"
-              />
-            )}
-            <p className="text-[11px] text-zinc-400">
-              When you click <strong>Save Tasks</strong>, tasks are saved under their date and automatically pushed to this webhook.
-            </p>
-          </div>
-        </div>
-
-        <DialogFooter className="flex flex-row items-center justify-between gap-2 sm:justify-between">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleTest}
-            disabled={testing || !webhookUrl.trim()}
-            className="text-xs"
-          >
-            {testing ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" /> : null}
-            Test Connection
-          </Button>
-
-          <div className="flex items-center gap-2">
-            <Button variant="ghost" size="sm" onClick={() => onOpenChange(false)} className="text-xs">
-              Cancel
-            </Button>
-            <Button
-              size="sm"
-              onClick={handleSave}
-              disabled={saving}
-              className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-full text-xs"
-            >
-              {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" /> : "Save Configuration"}
-            </Button>
-          </div>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
 const ALL = "all";
 
 export default function Tasks() {
@@ -341,8 +177,11 @@ export default function Tasks() {
   const [loading, setLoading] = useState(true);
   const [savingAll, setSavingAll] = useState(false);
   const [savingId, setSavingId] = useState(null);
+  const [cloningId, setCloningId] = useState(null);
+  const [cloningSelected, setCloningSelected] = useState(false);
+  const [deletingSelected, setDeletingSelected] = useState(false);
+  const [selectedIds, setSelectedIds] = useState(new Set());
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [sheetConfigOpen, setSheetConfigOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [filters, setFilters] = useState({
     date: "", status: ALL, priority: ALL, work_category: ALL,
@@ -365,7 +204,10 @@ export default function Tasks() {
     }
   }, [filters, founderMode, viewMode]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    load();
+    setSelectedIds(new Set());
+  }, [load]);
 
   const updateStatus = async (task, status) => {
     try {
@@ -382,6 +224,11 @@ export default function Tasks() {
     try {
       await api.delete(`/tasks/${id}`);
       toast.success("Task deleted");
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
       load();
     } catch (e) {
       toast.error(formatApiErrorDetail(e.response?.data?.detail));
@@ -392,8 +239,7 @@ export default function Tasks() {
   const handleSaveAll = async () => {
     if (tasks.length === 0) return;
     const taskIds = tasks.map((t) => t.id);
-    const dateLabel = filters.date || "active tasks";
-    if (!window.confirm(`Save and archive ${tasks.length} task(s) under their date to the Google Sheet?`)) return;
+    if (!window.confirm(`Save ${tasks.length} task(s) under their date to Saved History?`)) return;
 
     setSavingAll(true);
     try {
@@ -401,12 +247,7 @@ export default function Tasks() {
         task_ids: taskIds,
         task_type: founderMode ? "Founder Task" : "Designer Task",
       });
-      const data = res.data;
-      if (data.sheet_synced) {
-        toast.success(`Saved ${data.saved_count} task(s) under date and updated Google Sheet!`);
-      } else {
-        toast.success(`Saved ${data.saved_count} task(s)! Note: ${data.sheet_message}`);
-      }
+      toast.success(res.data?.message || `Saved ${res.data?.saved_count} task(s) under date to history!`);
       load();
     } catch (e) {
       toast.error(formatApiErrorDetail(e.response?.data?.detail) || "Failed to save tasks");
@@ -420,18 +261,78 @@ export default function Tasks() {
     setSavingId(task.id);
     try {
       const res = await api.post(`/tasks/${task.id}/save`);
-      const data = res.data;
-      if (data.sheet_synced) {
-        toast.success(`Task saved under ${task.date} and synced to Google Sheet!`);
-      } else {
-        toast.success(`Task saved! Note: ${data.sheet_message}`);
-      }
+      toast.success(res.data?.message || `Task saved under ${task.date} to history!`);
       load();
     } catch (e) {
       toast.error(formatApiErrorDetail(e.response?.data?.detail) || "Failed to save task");
     } finally {
       setSavingId(null);
     }
+  };
+
+  // Clone single saved task to Today's Active Tasks
+  const handleCloneSingleToToday = async (task) => {
+    setCloningId(task.id);
+    try {
+      const res = await api.post("/tasks/clone-to-today", { task_ids: [task.id] });
+      toast.success(`Task "${task.task_name}" added to today's active tasks!`);
+      setViewMode("active");
+    } catch (e) {
+      toast.error(formatApiErrorDetail(e.response?.data?.detail) || "Failed to add task to today");
+    } finally {
+      setCloningId(null);
+    }
+  };
+
+  // Clone multiple selected tasks to Today's Active Tasks
+  const handleCloneSelectedToToday = async () => {
+    if (selectedIds.size === 0) return;
+    setCloningSelected(true);
+    try {
+      const res = await api.post("/tasks/clone-to-today", { task_ids: Array.from(selectedIds) });
+      toast.success(res.data?.message || `Added ${res.data?.cloned_count} task(s) to today's active tasks!`);
+      setSelectedIds(new Set());
+      setViewMode("active");
+    } catch (e) {
+      toast.error(formatApiErrorDetail(e.response?.data?.detail) || "Failed to add tasks to today");
+    } finally {
+      setCloningSelected(false);
+    }
+  };
+
+  // Batch delete selected tasks
+  const handleDeleteSelected = async () => {
+    if (selectedIds.size === 0) return;
+    if (!window.confirm(`Delete ${selectedIds.size} selected task(s)? This cannot be undone.`)) return;
+    setDeletingSelected(true);
+    try {
+      const res = await api.post("/tasks/batch-delete", { task_ids: Array.from(selectedIds) });
+      toast.success(`Deleted ${res.data?.deleted_count || selectedIds.size} task(s)`);
+      setSelectedIds(new Set());
+      load();
+    } catch (e) {
+      toast.error(formatApiErrorDetail(e.response?.data?.detail) || "Failed to delete tasks");
+    } finally {
+      setDeletingSelected(false);
+    }
+  };
+
+  // Selection toggles
+  const toggleSelectAll = () => {
+    if (selectedIds.size === tasks.length && tasks.length > 0) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(tasks.map((t) => t.id)));
+    }
+  };
+
+  const toggleSelectOne = (id) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   };
 
   const setF = (k, v) => setFilters((f) => ({ ...f, [k]: v }));
@@ -521,7 +422,7 @@ export default function Tasks() {
         { label: "Output Link", cell: cellOutput },
         { label: "Review Notes / Changes", cell: cellReview, cls: "min-w-[200px]" },
       ];
-  const colCount = columns.length + 1;
+  const colCount = columns.length + (viewMode === "saved" ? 2 : 1);
 
   return (
     <div className="p-6 lg:p-8 fade-up">
@@ -535,7 +436,7 @@ export default function Tasks() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          {/* Prominent Save Button */}
+          {/* Prominent Save Button in Active View */}
           {viewMode === "active" && tasks.length > 0 && (
             <Button
               onClick={handleSaveAll}
@@ -549,33 +450,6 @@ export default function Tasks() {
                 <Save className="w-4 h-4 mr-1.5" />
               )}
               Save Tasks ({tasks.length})
-            </Button>
-          )}
-
-          {/* Google Sheet Direct Link */}
-          <a
-            href={GOOGLE_SHEET_URL}
-            target="_blank"
-            rel="noreferrer"
-            title="Open linked Google Sheet in new tab"
-          >
-            <Button variant="outline" className="rounded-full border-zinc-200 hover:bg-zinc-50 font-medium text-xs h-9">
-              <FileSpreadsheet className="w-4 h-4 mr-1.5 text-emerald-600" />
-              Task Sheet
-              <ExternalLink className="w-3 h-3 ml-1 text-zinc-400" />
-            </Button>
-          </a>
-
-          {/* Sheet Config Settings */}
-          {isFounder && (
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={() => setSheetConfigOpen(true)}
-              className="rounded-full border-zinc-200 hover:bg-zinc-50 w-9 h-9"
-              title="Google Sheet Integration Settings"
-            >
-              <Settings className="w-4 h-4 text-zinc-600" />
             </Button>
           )}
 
@@ -594,7 +468,7 @@ export default function Tasks() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
         {/* Role Tabs */}
         {isFounder ? (
-          <Tabs value={tab} onValueChange={setTab}>
+          <Tabs value={tab} onValueChange={(v) => { setTab(v); setSelectedIds(new Set()); }}>
             <TabsList>
               <TabsTrigger value="founder" data-testid="tab-founder-tasks">Founder Board</TabsTrigger>
               <TabsTrigger value="designer" data-testid="tab-designer-tasks">Designer Board</TabsTrigger>
@@ -605,7 +479,7 @@ export default function Tasks() {
         {/* View Mode Toggle: Active vs Saved */}
         <div className="flex items-center gap-1 bg-zinc-100 p-1 rounded-lg self-start sm:self-auto">
           <button
-            onClick={() => setViewMode("active")}
+            onClick={() => { setViewMode("active"); setSelectedIds(new Set()); }}
             className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-all ${
               viewMode === "active"
                 ? "bg-white text-zinc-900 shadow-sm"
@@ -619,7 +493,7 @@ export default function Tasks() {
             )}
           </button>
           <button
-            onClick={() => setViewMode("saved")}
+            onClick={() => { setViewMode("saved"); setSelectedIds(new Set()); }}
             className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-all flex items-center gap-1.5 ${
               viewMode === "saved"
                 ? "bg-white text-zinc-900 shadow-sm"
@@ -631,6 +505,51 @@ export default function Tasks() {
           </button>
         </div>
       </div>
+
+      {/* Batch Actions Toolbar when tasks are selected */}
+      {selectedIds.size > 0 && (
+        <div className="mb-4 bg-emerald-50 border border-emerald-200 rounded-xl p-3 flex flex-wrap items-center justify-between gap-3 text-emerald-950">
+          <div className="flex items-center gap-2">
+            <span className="font-semibold text-xs bg-emerald-600 text-white px-2.5 py-1 rounded-full">
+              {selectedIds.size} Selected
+            </span>
+            <span className="text-xs text-emerald-800 font-medium">
+              Actions for selected task(s):
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              onClick={handleCloneSelectedToToday}
+              disabled={cloningSelected}
+              className="rounded-full bg-emerald-700 hover:bg-emerald-800 text-white text-xs h-8 gap-1.5 shadow-sm"
+              data-testid="add-selected-to-today-button"
+            >
+              {cloningSelected ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <PlusCircle className="w-3.5 h-3.5" />}
+              Add Selected to Today's Tasks ({selectedIds.size})
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleDeleteSelected}
+              disabled={deletingSelected}
+              className="rounded-full border-red-300 text-red-600 hover:bg-red-50 text-xs h-8 gap-1.5"
+              data-testid="delete-selected-button"
+            >
+              {deletingSelected ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+              Delete Selected ({selectedIds.size})
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => setSelectedIds(new Set())}
+              className="text-xs text-zinc-500 hover:text-zinc-800 h-8"
+            >
+              Clear Selection
+            </Button>
+          </div>
+        </div>
+      )}
 
       {/* Filters Bar */}
       <div className="bg-white border border-zinc-200 rounded-lg p-3 mb-4 flex flex-wrap items-center gap-2">
@@ -652,84 +571,136 @@ export default function Tasks() {
         )}
       </div>
 
-      {/* Table */}
-      <div className="bg-white border border-zinc-200 rounded-lg overflow-hidden shadow-sm">
-        <div className="overflow-x-auto max-h-[calc(100vh-280px)] overflow-y-auto">
-          <Table className="ops-table">
+      {/* Tasks Table */}
+      <div className="bg-white border border-zinc-200 rounded-xl overflow-hidden shadow-sm">
+        <div className="overflow-x-auto">
+          <Table>
             <TableHeader>
-              <TableRow className="hover:bg-transparent">
+              <TableRow className="bg-zinc-50/75 hover:bg-zinc-50/75">
+                {viewMode === "saved" && (
+                  <TableHead className="w-10 px-3 text-center">
+                    <Checkbox
+                      checked={tasks.length > 0 && selectedIds.size === tasks.length}
+                      onCheckedChange={toggleSelectAll}
+                      aria-label="Select all tasks"
+                    />
+                  </TableHead>
+                )}
                 {columns.map((c) => (
-                  <TableHead key={c.label} className={c.cls}>{c.label}</TableHead>
+                  <TableHead key={c.label} className={`font-bold text-zinc-700 text-xs ${c.cls || ""}`}>{c.label}</TableHead>
                 ))}
-                <TableHead className="text-right">Actions</TableHead>
+                <TableHead className="text-right font-bold text-zinc-700 text-xs min-w-[140px]">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={colCount} className="text-center py-12">
-                    <Loader2 className="w-5 h-5 animate-spin text-emerald-600 mx-auto" />
+                  <TableCell colCount={colCount} className="text-center py-12 text-zinc-400">
+                    <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2 text-emerald-600" />
+                    Loading tasks...
                   </TableCell>
                 </TableRow>
               ) : tasks.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={colCount} className="text-center py-12 text-zinc-400 text-sm">
-                    {viewMode === "active"
-                      ? `No active ${founderMode ? "founder" : "designer"} tasks. Create a new task or click "Saved History" to view previously saved tasks.`
-                      : `No saved ${founderMode ? "founder" : "designer"} tasks found for the selected filter.`}
+                  <TableCell colCount={colCount} className="text-center py-12 text-zinc-400">
+                    {viewMode === "saved"
+                      ? "No saved tasks in history for this filter."
+                      : "No active tasks. Create a new task or pick tasks from Saved History to work on today!"}
                   </TableCell>
                 </TableRow>
               ) : (
                 tasks.map((t) => (
                   <TableRow key={t.id} data-testid={`task-row-${t.id}`} className="align-top hover:bg-zinc-50/50">
+                    {viewMode === "saved" && (
+                      <TableCell className="w-10 px-3 text-center pt-3.5">
+                        <Checkbox
+                          checked={selectedIds.has(t.id)}
+                          onCheckedChange={() => toggleSelectOne(t.id)}
+                          aria-label={`Select ${t.task_name}`}
+                        />
+                      </TableCell>
+                    )}
                     {columns.map((c) => (
                       <TableCell key={c.label} className={c.cls}>{c.cell(t)}</TableCell>
                     ))}
                     <TableCell className="text-right whitespace-nowrap">
-                      {/* Row Save Button */}
-                      {!t.saved ? (
-                        <button
-                          onClick={() => handleSaveSingle(t)}
-                          disabled={savingId === t.id}
-                          className="p-1.5 hover:bg-emerald-50 rounded transition-colors text-emerald-600 mr-1"
-                          title="Save task under its date & sync to Google Sheet"
-                          data-testid={`save-task-${t.id}`}
-                        >
-                          {savingId === t.id ? (
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                          ) : (
-                            <Save className="w-4 h-4" />
-                          )}
-                        </button>
+                      {viewMode === "active" ? (
+                        <>
+                          {/* Save Task under its date to History */}
+                          <button
+                            onClick={() => handleSaveSingle(t)}
+                            disabled={savingId === t.id}
+                            className="p-1.5 hover:bg-emerald-50 rounded transition-colors text-emerald-600 mr-1"
+                            title="Save task under its date to Saved History"
+                            data-testid={`save-task-${t.id}`}
+                          >
+                            {savingId === t.id ? (
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                              <Save className="w-4 h-4" />
+                            )}
+                          </button>
+
+                          {/* Edit Button */}
+                          <button
+                            onClick={() => { setEditing(t); setDialogOpen(true); }}
+                            className="p-1.5 hover:bg-zinc-100 rounded transition-colors mr-1"
+                            data-testid={`edit-task-${t.id}`}
+                            title="Edit Task"
+                          >
+                            <Pencil className="w-4 h-4 text-zinc-500" />
+                          </button>
+
+                          {/* Delete Button */}
+                          <button
+                            onClick={() => remove(t.id)}
+                            className="p-1.5 hover:bg-red-50 rounded transition-colors"
+                            data-testid={`delete-task-${t.id}`}
+                            title="Delete Task"
+                          >
+                            <Trash2 className="w-4 h-4 text-red-500" />
+                          </button>
+                        </>
                       ) : (
-                        <span
-                          className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 mr-1.5"
-                          title={`Saved ${t.saved_at ? new Date(t.saved_at).toLocaleString() : ''}`}
-                        >
-                          <CheckCircle2 className="w-3 h-3 mr-0.5" /> Saved
-                        </span>
-                      )}
+                        <div className="flex items-center justify-end gap-1">
+                          {/* Add to Today's Tasks */}
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleCloneSingleToToday(t)}
+                            disabled={cloningId === t.id}
+                            className="h-7 px-2.5 text-xs font-semibold text-emerald-700 hover:text-emerald-800 hover:bg-emerald-50 border-emerald-300 gap-1 rounded-full"
+                            title="Add this task to Today's Active Tasks"
+                            data-testid={`add-to-today-${t.id}`}
+                          >
+                            {cloningId === t.id ? (
+                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            ) : (
+                              <PlusCircle className="w-3.5 h-3.5" />
+                            )}
+                            Add to Today
+                          </Button>
 
-                      {/* Edit Button */}
-                      <button
-                        onClick={() => { setEditing(t); setDialogOpen(true); }}
-                        className="p-1.5 hover:bg-zinc-100 rounded transition-colors"
-                        data-testid={`edit-task-${t.id}`}
-                        title="Edit Task"
-                      >
-                        <Pencil className="w-4 h-4 text-zinc-500" />
-                      </button>
+                          {/* Edit Button */}
+                          <button
+                            onClick={() => { setEditing(t); setDialogOpen(true); }}
+                            className="p-1.5 hover:bg-zinc-100 rounded transition-colors"
+                            data-testid={`edit-task-${t.id}`}
+                            title="Edit Task"
+                          >
+                            <Pencil className="w-4 h-4 text-zinc-500" />
+                          </button>
 
-                      {/* Delete Button (Founder only) */}
-                      {isFounder && (
-                        <button
-                          onClick={() => remove(t.id)}
-                          className="p-1.5 hover:bg-red-50 rounded transition-colors"
-                          data-testid={`delete-task-${t.id}`}
-                          title="Delete Task"
-                        >
-                          <Trash2 className="w-4 h-4 text-red-500" />
-                        </button>
+                          {/* Delete Button in History */}
+                          <button
+                            onClick={() => remove(t.id)}
+                            className="p-1.5 hover:bg-red-50 rounded transition-colors"
+                            data-testid={`delete-task-${t.id}`}
+                            title="Delete Task from History"
+                          >
+                            <Trash2 className="w-4 h-4 text-red-500" />
+                          </button>
+                        </div>
                       )}
                     </TableCell>
                   </TableRow>
@@ -742,9 +713,6 @@ export default function Tasks() {
 
       {/* Edit/Create Dialog */}
       <TaskForm open={dialogOpen} onOpenChange={setDialogOpen} initial={editing} onSaved={load} mode={tab} />
-
-      {/* Google Sheet Config Dialog */}
-      <GoogleSheetConfigModal open={sheetConfigOpen} onOpenChange={setSheetConfigOpen} />
     </div>
   );
 }
